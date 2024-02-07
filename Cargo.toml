@@ -1,0 +1,19 @@
+[package]
+name = "mintyml"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.either]
+version = "1.9.0"
+default-features = false
+
+[dependencies.rs-typed-parser]
+git = "https://github.com/youngspe/rs-typed-parser"
+branch = "main"
+default-features = false
+
+[features]
+default = ["std"]
+std = ["rs-typed-parser/std"]
