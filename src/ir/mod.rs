@@ -54,7 +54,7 @@ where
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Document<'src> {
-    nodes: Vec<Node<'src>>,
+    pub nodes: Vec<Node<'src>>,
 }
 
 impl<'src> ToStatic for Document<'src> {
@@ -93,8 +93,8 @@ impl<'src> ToStatic for Node<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Element<'src> {
-    selector: Selector<'src>,
-    nodes: Vec<Node<'src>>,
+    pub selector: Selector<'src>,
+    pub nodes: Vec<Node<'src>>,
 }
 
 impl<'src> ToStatic for Element<'src> {
@@ -109,10 +109,10 @@ impl<'src> ToStatic for Element<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Selector<'src> {
-    element: SelectorElement<'src>,
-    class_names: Vec<Cow<'src, str>>,
-    id: Option<Cow<'src, str>>,
-    attributes: Vec<Attribute<'src>>,
+    pub element: SelectorElement<'src>,
+    pub class_names: Vec<Cow<'src, str>>,
+    pub id: Option<Cow<'src, str>>,
+    pub attributes: Vec<Attribute<'src>>,
 }
 
 impl<'src> ToStatic for Selector<'src> {
@@ -151,8 +151,8 @@ impl From<InferElement> for Selector<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Attribute<'src> {
-    name: Cow<'src, str>,
-    value: Option<Cow<'src, str>>,
+    pub name: Cow<'src, str>,
+    pub value: Option<Cow<'src, str>>,
 }
 
 impl<'src> ToStatic for Attribute<'src> {
@@ -187,6 +187,7 @@ pub enum InferElement {
     Line,
     Block,
     Inline,
+    Paragraph,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -312,13 +313,17 @@ impl<'src> Document<'src> {
         })
     }
 
-    pub fn parse(src: &'src str) -> Result<Self, Vec<SyntaxError>> {
+    pub fn from_ast(src: &'src str, ast: &ast::Document) -> Result<Self, Vec<SyntaxError>> {
         let mut cx = BuildContext {
             src,
             errors: default(),
         };
-        let ast = parse_tree::<ast::Document, 2>(src).map_err(|e| vec![e.into()])?;
         Self::build_from_ast(&mut cx, &ast).map_err(|_| cx.errors)
+    }
+
+    pub fn parse(src: &'src str) -> Result<Self, Vec<SyntaxError>> {
+        let ast = parse_tree::<ast::Document, 2>(src).map_err(|e| vec![e.into()])?;
+        Self::from_ast(src, &ast)
     }
 }
 
@@ -379,54 +384,71 @@ impl<'src> Selector<'src> {
     }
 }
 
+fn build_text_line<'src>(
+    cx: &mut BuildContext<'src>,
+    line: &ast::TextLine,
+    out: &mut Vec<Node<'src>>,
+) -> BuildResult<()> {
+    [&line.part1]
+        .into_iter()
+        .chain(&line.parts)
+        .map(|part| match part {
+            ast::TextLinePart::TextSegment { text } => {
+                Ok(Node::Text(cx.escapable_slice(text.range)?))
+            }
+            ast::TextLinePart::Inline {
+                inline: ast::Inline {
+                    inner: Some(node), ..
+                },
+            } => match &**node {
+                ast::Node::Element {
+                    element: ast::Element::WithSelector { selector, body },
+                } => Ok(Element {
+                    selector: Selector::build_from_ast(cx, InferElement::Inline, selector)?,
+                    nodes: build_element_body(cx, body)?,
+                }
+                .into()),
+                ast::Node::Element {
+                    element: ast::Element::Body { body },
+                } => Ok(Element {
+                    selector: InferElement::Inline.into(),
+                    nodes: build_element_body(cx, body)?,
+                }
+                .into()),
+                ast::Node::Paragraph { paragraph } => {
+                    build_paragraph(cx, paragraph).map(Node::from)
+                }
+            },
+            ast::TextLinePart::Inline {
+                inline: ast::Inline { inner: None, .. },
+            } => Ok(Element {
+                selector: InferElement::Inline.into(),
+                nodes: default(),
+            }
+            .into()),
+            ast::TextLinePart::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+        })
+        .try_for_each(|node| {
+            out.push(node?);
+            Ok(())
+        })
+}
+
 fn build_paragraph<'src>(
     cx: &mut BuildContext<'src>,
     paragraph: &ast::Paragraph,
 ) -> BuildResult<Element<'src>> {
+    let mut nodes = Vec::new();
+    build_text_line(cx, &paragraph.line1, &mut nodes)?;
+
+    for line in &paragraph.lines {
+        nodes.push(Node::Text(" ".into()));
+        build_text_line(cx, line, &mut nodes)?;
+    }
+
     Ok(Element {
-        selector: InferElement::Line.into(),
-        nodes: [&paragraph.line1]
-            .into_iter()
-            .chain(&paragraph.lines)
-            .flat_map(|line| [&line.part1].into_iter().chain(&line.parts))
-            .map(|part| match part {
-                ast::TextLinePart::TextSegment { text } => Ok(Node::Text(cx.slice(text.range))),
-                ast::TextLinePart::Inline {
-                    inline:
-                        ast::Inline {
-                            inner: Some(node), ..
-                        },
-                } => match &**node {
-                    ast::Node::Element {
-                        element: ast::Element::WithSelector { selector, body },
-                    } => Ok(Element {
-                        selector: Selector::build_from_ast(cx, InferElement::Inline, selector)?,
-                        nodes: build_element_body(cx, body)?,
-                    }
-                    .into()),
-                    ast::Node::Element {
-                        element: ast::Element::Body { body },
-                    } => Ok(Element {
-                        selector: InferElement::Inline.into(),
-                        nodes: build_element_body(cx, body)?,
-                    }
-                    .into()),
-                    ast::Node::Paragraph { paragraph } => {
-                        build_paragraph(cx, paragraph).map(Node::from)
-                    }
-                },
-                ast::TextLinePart::Inline {
-                    inline: ast::Inline { inner: None, .. },
-                } => Ok(Element {
-                    selector: InferElement::Inline.into(),
-                    nodes: default(),
-                }
-                .into()),
-                ast::TextLinePart::Comment { comment } => {
-                    Ok(Node::Comment(cx.slice(comment.inner)))
-                }
-            })
-            .collect::<BuildResult<_>>()?,
+        selector: InferElement::Paragraph.into(),
+        nodes,
     })
 }
 
@@ -492,8 +514,6 @@ fn ir_demo() {
             h1#foo.bar[
                 x
             ].baz> <( foo )>
-
-
 
             Hello, world!
             Click <( a[x=1]> here )> to get<!this is a comment!> started.

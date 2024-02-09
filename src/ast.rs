@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use rs_typed_parser::parse::LocationRange;
+use rs_typed_parser::{ast::Ignore, parse::LocationRange};
 
 rs_typed_parser::define_token!(
     #[pattern(exact = ">")]
@@ -112,16 +112,23 @@ rs_typed_parser::define_rule!(
         pub r_brace: RightBrace,
     }
 
-    #[transform(ignore_before<Space>)]
     pub struct TextLine {
         pub part1: TextLinePart,
         pub parts: Vec<TextLinePart>,
     }
 
     pub enum TextLinePart {
-        TextSegment { text: TextSegment },
-        Inline { inline: Inline },
-        Comment { comment: Comment },
+        TextSegment {
+            text: TextSegment,
+        },
+        #[transform(ignore_before<Space>)]
+        Inline {
+            inline: Inline,
+        },
+        #[transform(ignore_before<Space>)]
+        Comment {
+            comment: Comment,
+        },
     }
 
     pub struct Comment {
@@ -145,7 +152,7 @@ rs_typed_parser::define_rule!(
 
     pub struct Paragraph {
         pub line1: TextLine,
-        #[transform(for_each<discard_before<NewLine>>)]
+        #[transform(for_each<discard_before<(NewLine, Ignore<Space>)>>)]
         pub lines: Vec<TextLine>,
     }
 
@@ -160,7 +167,7 @@ rs_typed_parser::define_rule!(
         },
 
         Line {
-            #[transform(ignore_around<Space>)]
+            #[transform(ignore_before<Space>)]
             angle: RightAngle,
             body: Option<Box<Node>>,
         },
@@ -257,7 +264,7 @@ fn ast_demo() {
 
 
             Hello, world!
-            Click <( a[x=1]> here )> to get<!this is a comment!> started.
+            Click <( a[x=1]> here )> to \>get<!this is a comment!> started.
 
             div {
                 a> 1
