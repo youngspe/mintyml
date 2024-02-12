@@ -3,7 +3,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use rs_typed_parser::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
+use gramma::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
 
 use crate::{
     ast,
@@ -95,6 +95,7 @@ impl<'src> ToStatic for Node<'src> {
 pub struct Element<'src> {
     pub selector: Selector<'src>,
     pub nodes: Vec<Node<'src>>,
+    pub kind: ElementKind,
 }
 
 impl<'src> ToStatic for Element<'src> {
@@ -103,11 +104,12 @@ impl<'src> ToStatic for Element<'src> {
         Element {
             selector: self.selector.to_static(),
             nodes: self.nodes.to_static(),
+            kind: self.kind,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Selector<'src> {
     pub element: SelectorElement<'src>,
     pub class_names: Vec<Cow<'src, str>>,
@@ -138,17 +140,6 @@ impl<'src> From<SelectorElement<'src>> for Selector<'src> {
     }
 }
 
-impl From<InferElement> for Selector<'_> {
-    fn from(element: InferElement) -> Self {
-        Selector {
-            element: SelectorElement::Infer(element),
-            class_names: default(),
-            id: default(),
-            attributes: default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Attribute<'src> {
     pub name: Cow<'src, str>,
@@ -166,9 +157,10 @@ impl<'src> ToStatic for Attribute<'src> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SelectorElement<'src> {
-    Infer(InferElement),
+    #[default]
+    Infer,
     Name(Cow<'src, str>),
 }
 
@@ -176,15 +168,16 @@ impl<'src> ToStatic for SelectorElement<'src> {
     type Static = SelectorElement<'static>;
     fn to_static(self) -> Self::Static {
         match self {
-            SelectorElement::Infer(x) => SelectorElement::Infer(x),
+            SelectorElement::Infer => SelectorElement::Infer,
             SelectorElement::Name(x) => SelectorElement::Name(x.to_static()),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum InferElement {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ElementKind {
     Line,
+    LineBlock,
     Block,
     Inline,
     Paragraph,
@@ -208,7 +201,7 @@ pub enum SyntaxErrorKind {
     #[non_exhaustive]
     InvalidEscape {},
     #[non_exhaustive]
-    ParseFailed { expected: Vec<&'static TokenType> },
+    ParseFailed { expected: Vec<TokenType> },
 }
 
 impl From<EscapeError> for SyntaxError {
@@ -322,7 +315,7 @@ impl<'src> Document<'src> {
     }
 
     pub fn parse(src: &'src str) -> Result<Self, Vec<SyntaxError>> {
-        let ast = parse_tree::<ast::Document, 2>(src).map_err(|e| vec![e.into()])?;
+        let ast = parse_tree::<ast::Document, 4>(src).map_err(|e| vec![e.into()])?;
         Self::from_ast(src, &ast)
     }
 }
@@ -330,14 +323,13 @@ impl<'src> Document<'src> {
 impl<'src> Selector<'src> {
     fn build_from_ast(
         cx: &mut BuildContext<'src>,
-        default_infer: InferElement,
         ast::Selector { element, parts }: &ast::Selector,
     ) -> BuildResult<Self> {
         let element = match element {
             Some(ast::ElementSelector::Name { name }) => {
                 SelectorElement::Name(cx.slice(name.range))
             }
-            None | Some(ast::ElementSelector::Star { .. }) => SelectorElement::Infer(default_infer),
+            None | Some(ast::ElementSelector::Star { .. }) => SelectorElement::Infer,
         };
 
         parts.iter().try_fold(Self::from(element), |mut out, part| {
@@ -389,49 +381,61 @@ fn build_text_line<'src>(
     line: &ast::TextLine,
     out: &mut Vec<Node<'src>>,
 ) -> BuildResult<()> {
-    [&line.part1]
+    [(&None, &line.part1)]
         .into_iter()
-        .chain(&line.parts)
-        .map(|part| match part {
-            ast::TextLinePart::TextSegment { text } => {
-                Ok(Node::Text(cx.escapable_slice(text.range)?))
-            }
-            ast::TextLinePart::Inline {
-                inline: ast::Inline {
-                    inner: Some(node), ..
-                },
-            } => match &**node {
-                ast::Node::Element {
-                    element: ast::Element::WithSelector { selector, body },
-                } => Ok(Element {
-                    selector: Selector::build_from_ast(cx, InferElement::Inline, selector)?,
-                    nodes: build_element_body(cx, body)?,
-                }
-                .into()),
-                ast::Node::Element {
-                    element: ast::Element::Body { body },
-                } => Ok(Element {
-                    selector: InferElement::Inline.into(),
-                    nodes: build_element_body(cx, body)?,
-                }
-                .into()),
-                ast::Node::Paragraph { paragraph } => {
-                    build_paragraph(cx, paragraph).map(Node::from)
-                }
-            },
-            ast::TextLinePart::Inline {
-                inline: ast::Inline { inner: None, .. },
-            } => Ok(Element {
-                selector: InferElement::Inline.into(),
-                nodes: default(),
-            }
-            .into()),
-            ast::TextLinePart::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+        .chain(line.parts.iter().map(|(space, parts)| (space, parts)))
+        .flat_map(|(space, part)| {
+            space
+                .as_ref()
+                .map(|_| Ok(Node::Text(" ".into())))
+                .into_iter()
+                .chain([build_text_line_part(part, cx)])
         })
         .try_for_each(|node| {
             out.push(node?);
             Ok(())
         })
+}
+
+fn build_text_line_part<'src>(
+    part: &ast::TextLinePart,
+    cx: &mut BuildContext<'src>,
+) -> Result<Node<'src>, BuildError> {
+    match part {
+        ast::TextLinePart::TextSegment { text } => Ok(Node::Text(cx.escapable_slice(text.range)?)),
+        ast::TextLinePart::Inline {
+            inline: ast::Inline {
+                inner: Some(node), ..
+            },
+        } => match &**node {
+            ast::Node::Element {
+                element: ast::Element::WithSelector { selector, body },
+            } => Ok(Element {
+                selector: Selector::build_from_ast(cx, selector)?,
+                nodes: build_element_body(cx, body)?,
+                kind: ElementKind::Inline,
+            }
+            .into()),
+            ast::Node::Element {
+                element: ast::Element::Body { body },
+            } => Ok(Element {
+                selector: default(),
+                nodes: build_element_body(cx, body)?,
+                kind: ElementKind::Inline,
+            }
+            .into()),
+            ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
+        },
+        ast::TextLinePart::Inline {
+            inline: ast::Inline { inner: None, .. },
+        } => Ok(Element {
+            selector: default(),
+            nodes: default(),
+            kind: ElementKind::Inline,
+        }
+        .into()),
+        ast::TextLinePart::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+    }
 }
 
 fn build_paragraph<'src>(
@@ -447,8 +451,9 @@ fn build_paragraph<'src>(
     }
 
     Ok(Element {
-        selector: InferElement::Paragraph.into(),
+        selector: default(),
         nodes,
+        kind: ElementKind::Paragraph,
     })
 }
 
@@ -478,20 +483,23 @@ fn build_element<'src>(
 ) -> BuildResult<Element<'src>> {
     match ast {
         ast::Element::WithSelector { selector, body } => Ok(Element {
-            selector: Selector::build_from_ast(cx, get_default_infer(body), selector)?,
+            selector: Selector::build_from_ast(cx, selector)?,
             nodes: build_element_body(cx, body)?,
+            kind: get_default_kind(body),
         }),
         ast::Element::Body { body } => Ok(Element {
-            selector: get_default_infer(body).into(),
+            selector: default(),
             nodes: build_element_body(cx, body)?,
+            kind: get_default_kind(body),
         }),
     }
 }
 
-fn get_default_infer(body: &ast::ElementBody) -> InferElement {
+fn get_default_kind(body: &ast::ElementBody) -> ElementKind {
     match body {
-        ast::ElementBody::Block { .. } => InferElement::Block,
-        ast::ElementBody::LineBlock { .. } | ast::ElementBody::Line { .. } => InferElement::Line,
+        ast::ElementBody::Block { .. } => ElementKind::Block,
+        ast::ElementBody::Line { .. } => ElementKind::Line,
+        ast::ElementBody::LineBlock { .. } => ElementKind::LineBlock,
     }
 }
 
@@ -534,7 +542,6 @@ fn ir_demo() {
     let _doc = Document::parse(src).unwrap();
     #[cfg(feature = "std")]
     {
-        use rs_typed_parser::ast::WithSource;
         ::std::println!("{:#?}", _doc);
     }
 }

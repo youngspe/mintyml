@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
-use rs_typed_parser::{ast::Ignore, parse::LocationRange};
+use gramma::{ast::Ignore, parse::LocationRange};
 
-rs_typed_parser::define_token!(
+gramma::define_token!(
     #[pattern(exact = ">")]
     pub struct RightAngle;
 
@@ -43,11 +43,11 @@ rs_typed_parser::define_token!(
             | < [^ \( ! \n ]
             | \) [^ > \n ]
             | [ < \) ] $
-        )+ [\  \t]*
+        )+
     )+")]
     pub struct TextSegment;
 
-    #[pattern(exact = "\n")]
+    #[pattern(regex = r"[ \t]*\n[ \t]*")]
     pub struct NewLine;
     #[pattern(regex = r"[ \t]+")]
     pub struct Space;
@@ -104,7 +104,7 @@ rs_typed_parser::define_token!(
     pub struct CloseComment;
 );
 
-rs_typed_parser::define_rule!(
+gramma::define_rule!(
     pub struct Block {
         pub l_brace: LeftBrace,
         #[transform(ignore_around<Whitespace>)]
@@ -114,21 +114,13 @@ rs_typed_parser::define_rule!(
 
     pub struct TextLine {
         pub part1: TextLinePart,
-        pub parts: Vec<TextLinePart>,
+        pub parts: Vec<(Option<Space>, TextLinePart)>,
     }
 
     pub enum TextLinePart {
-        TextSegment {
-            text: TextSegment,
-        },
-        #[transform(ignore_before<Space>)]
-        Inline {
-            inline: Inline,
-        },
-        #[transform(ignore_before<Space>)]
-        Comment {
-            comment: Comment,
-        },
+        TextSegment { text: TextSegment },
+        Inline { inline: Inline },
+        Comment { comment: Comment },
     }
 
     pub struct Comment {
@@ -152,7 +144,7 @@ rs_typed_parser::define_rule!(
 
     pub struct Paragraph {
         pub line1: TextLine,
-        #[transform(for_each<discard_before<(NewLine, Ignore<Space>)>>)]
+        #[transform(for_each<discard_before<NewLine>>)]
         pub lines: Vec<TextLine>,
     }
 
@@ -167,7 +159,7 @@ rs_typed_parser::define_rule!(
         },
 
         Line {
-            #[transform(ignore_before<Space>)]
+            #[transform(ignore_around<Space>)]
             angle: RightAngle,
             body: Option<Box<Node>>,
         },
@@ -253,36 +245,98 @@ rs_typed_parser::define_rule!(
 
 #[test]
 fn ast_demo() {
-    use rs_typed_parser::ast::parse_tree;
+    use gramma::ast::parse_tree;
 
     let src = r#"
-        section {
-            h1#foo.bar[
-                x
-            ].baz> <( foo )>
+section {
+    h1#foo.bar[
+        x
+    ].baz> <(foo)>
 
+    div> { 1 }
 
+    Hello, world!
+    Click <(a[x=1]> here )> to get<!this is a comment!> started.
 
-            Hello, world!
-            Click <( a[x=1]> here )> to \>get<!this is a comment!> started.
+    div {
+        a>1
+    }
 
-            div {
-                a> 1
-            }
+    > {
+        This paragraph contains <(em> emphasized)>,
+        <(strong> strong)>, and <(u> underlined)> text.
+    }
+}
+section {
+    line 1
+    line 2
+    >new paragraph
+    >new paragraph
+    same paragraph
+    >new paragraph
+}
+section#list-section {
+    Following is a list:
+
+    div> foo
+
+    ul {
+        Item 1
+
+        Item 2
+
+        Item
+        3
+
+        #item4> Item 4
+
+        {
+            Item 5
         }
-        section {
-            line 1
-            line 2
-            > new paragraph
-            > new paragraph
-            same paragraph
-            > new paragraph
+
+        > {
+            Item 6
         }
+    }
+}
+section {
+    Following is a table:
+
+    table {
+        {
+            th> Foo
+            th> Bar
+        }
+        {
+            a
+
+            b
+        }
+        <( c )> <( d )>
+    }
+}
+    "#;
+    let _ast = parse_tree::<Document, 3>(src).unwrap();
+    #[cfg(feature = "std")]
+    {
+        ::std::println!("{:#}", gramma::display_tree(src, &_ast));
+    }
+}
+
+#[test]
+fn ast_demo2() {
+    use gramma::ast::parse_tree;
+
+    let src = r#"
+section {
+    a
+
+    b
+}
     "#;
     let _ast = parse_tree::<Document, 2>(src).unwrap();
     #[cfg(feature = "std")]
     {
-        use rs_typed_parser::ast::WithSource;
-        ::std::println!("{:#}", WithSource { src, ast: _ast });
+        ::std::println!("{:#}", gramma::display_tree(src, &_ast));
     }
 }

@@ -14,7 +14,7 @@ use alloc::{
 
 use crate::{
     escape::{unescape_parts, UnescapePart},
-    ir::{Document, Element, InferElement, Node, Selector, SelectorElement},
+    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement},
     utils::default,
 };
 
@@ -140,6 +140,7 @@ struct OutputContext<'cx, Out> {
     config: OutputConfig,
     indent_level: usize,
     ci: ContentInference<'cx>,
+    element_kind: ElementKind,
     first_line: bool,
 }
 
@@ -303,11 +304,14 @@ where
     fn in_content<T>(
         &mut self,
         mut ci: ContentInference<'cx>,
+        mut element_kind: ElementKind,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
         mem::swap(&mut ci, &mut self.ci);
+        mem::swap(&mut element_kind, &mut self.element_kind);
         let out = f(self);
         mem::swap(&mut ci, &mut self.ci);
+        mem::swap(&mut element_kind, &mut self.element_kind);
         out
     }
 
@@ -359,18 +363,24 @@ where
     }
 
     fn process_element(&mut self, element: &Element) -> OutputResult {
-        let Some(tag) = (match &element.selector.element {
-            SelectorElement::Name(s) => Some(&**s),
-            SelectorElement::Infer(InferElement::Block) => Some(self.ci.block),
-            SelectorElement::Infer(InferElement::Inline) => Some(self.ci.inline),
-            SelectorElement::Infer(InferElement::Line) => Some(self.ci.line),
-            SelectorElement::Infer(InferElement::Paragraph) => self.ci.paragraph,
+        let Some(tag) = (match (&element.selector.element, &element.kind) {
+            (SelectorElement::Name(s), _) => Some(&**s),
+            (SelectorElement::Infer, ElementKind::Block) => Some(self.ci.block),
+            (SelectorElement::Infer, ElementKind::Inline) => Some(self.ci.inline),
+            (SelectorElement::Infer, ElementKind::Line | ElementKind::LineBlock) => {
+                Some(self.ci.line)
+            }
+            (SelectorElement::Infer, ElementKind::Paragraph) => match self.element_kind {
+                ElementKind::Line | ElementKind::LineBlock => None,
+                _ => self.ci.paragraph,
+            },
         }) else {
             return self.in_content(
                 ContentInference {
                     mode: ContentMode::Inline,
                     ..self.ci
                 },
+                element.kind,
                 |this| {
                     element
                         .nodes
@@ -380,9 +390,14 @@ where
             );
         };
 
-        let (_, tag_info) = self.get_info(tag, self.ci);
+        let mode = match element.kind {
+            ElementKind::Block => self.ci.mode,
+            _ => ContentMode::Inline,
+        };
+        let (_, tag_info) = self.get_info(tag, ContentInference { mode, ..self.ci });
+
         self.line(|this| this.write_open_tag(tag, &element.selector))?;
-        self.in_content(tag_info.ci, |this| {
+        self.in_content(tag_info.ci, element.kind, |this| {
             this.indent(|this| {
                 element
                     .nodes
@@ -442,6 +457,7 @@ pub fn output_html_to(
             inline: "span",
             paragraph: Some("p"),
         },
+        element_kind: ElementKind::Block,
         first_line: true,
     };
     document
@@ -453,28 +469,75 @@ pub fn output_html_to(
 #[test]
 fn output_demo() {
     let src = r#"
-        section {
-            h1#foo.bar[
-                x
-            ].baz> <(foo)>
+section {
+    h1#foo.bar[
+        x
+    ].baz> <(foo)>
 
+    div> { 1 }
 
+    Hello, world!
+    Click <(a[x=1]> here )> to get<!this is a comment!> started.
 
-            Hello, world!
-            Click <(a[x=1]>here)> to get<!this is a comment!> started.
+    div {
+        a>1
+    }
 
-            div {
-                a> 1
-            }
+    > {
+        This paragraph contains <(em> emphasized)>,
+        <(strong> strong)>, and <(u> underlined)> text.
+    }
+}
+section {
+    line 1
+    line 2
+    >new paragraph
+    >new paragraph
+    same paragraph
+    >new paragraph
+}
+section#list-section {
+    Following is a list:
+
+    div> foo
+
+    ul {
+        Item 1
+
+        Item 2
+
+        Item
+        3
+
+        #item4> Item 4
+
+        {
+            Item 5
         }
-        section {
-            line 1
-            line 2
-            > new paragraph
-            > new paragraph
-            same paragraph
-            > new paragraph
+
+        > {
+            Item 6
         }
+    }
+}
+section {
+    Following is a table:
+
+    table {
+        {
+            th> Foo
+            th> Bar
+        }
+        {
+            a
+
+
+            
+            b
+        }
+        <( c )> <( d )>
+    }
+}
     "#;
     let mut out = String::new();
     output_html_to(
@@ -488,7 +551,6 @@ fn output_demo() {
     .unwrap();
     #[cfg(feature = "std")]
     {
-        use rs_typed_parser::ast::WithSource;
         ::std::println!("{out}");
     }
 }

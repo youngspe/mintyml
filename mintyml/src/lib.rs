@@ -2,7 +2,7 @@
 
 extern crate alloc;
 extern crate either;
-extern crate rs_typed_parser;
+extern crate gramma;
 
 pub(crate) mod ast;
 pub(crate) mod escape;
@@ -10,8 +10,8 @@ pub(crate) mod ir;
 pub(crate) mod output;
 pub(crate) mod utils;
 
-use core::fmt;
 use alloc::{string::String, vec, vec::Vec};
+use core::fmt;
 
 use ir::Document;
 use output::OutputError;

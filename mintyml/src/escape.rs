@@ -1,6 +1,6 @@
 use core::iter;
 
-use rs_typed_parser::parse::{Location, LocationRange};
+use gramma::parse::{Location, LocationRange};
 
 use crate::utils::StrCursor;
 
