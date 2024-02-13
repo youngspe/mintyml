@@ -132,6 +132,26 @@ struct TagInfo<'cx> {
 #[derive(Debug, Default, Clone)]
 pub struct OutputConfig {
     pub indent: Option<Cow<'static, str>>,
+    pub xml: Option<bool>,
+}
+
+impl OutputConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn update(mut self, f: impl FnOnce(&mut Self)) -> Self {
+        f(&mut self);
+        self
+    }
+
+    pub fn indent(self, indent: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.indent = Some(indent.into()))
+    }
+
+    pub fn xml(self, xml: bool) -> Self {
+        self.update(|c| c.xml = Some(xml))
+    }
 }
 
 struct OutputContext<'cx, Out> {
@@ -144,8 +164,9 @@ struct OutputContext<'cx, Out> {
     first_line: bool,
 }
 
-struct HtmlEscape<W, const QUOTE: bool> {
-    inner: W,
+trait Escape {
+    fn get_escape(&self, ch: char) -> Option<EscapeKind>;
+    fn write_escape(&self, esc: EscapeKind, out: &mut impl Write) -> fmt::Result;
 }
 
 enum EscapeKind {
@@ -153,12 +174,11 @@ enum EscapeKind {
     Special(&'static str),
 }
 
-impl<W: Write, const QUOTE: bool> HtmlEscape<W, QUOTE> {
-    fn new(inner: W) -> Self {
-        Self { inner }
-    }
+#[derive(Default)]
+struct HtmlEscape<const QUOTE: bool> {}
 
-    fn get_escape(ch: char) -> Option<EscapeKind> {
+impl<const QUOTE: bool> Escape for HtmlEscape<QUOTE> {
+    fn get_escape(&self, ch: char) -> Option<EscapeKind> {
         match ch {
             '&' => Some(EscapeKind::Special("&amp;")),
             '<' => Some(EscapeKind::Special("&lt;")),
@@ -171,26 +191,66 @@ impl<W: Write, const QUOTE: bool> HtmlEscape<W, QUOTE> {
         }
     }
 
-    fn write_escape(&mut self, esc: EscapeKind) -> fmt::Result {
+    fn write_escape(&self, esc: EscapeKind, out: &mut impl Write) -> fmt::Result {
         match esc {
-            EscapeKind::Number(num) => write!(self.inner, "&#{num};"),
-            EscapeKind::Special(s) => self.inner.write_str(s),
+            EscapeKind::Number(num) => write!(out, "&#{num};"),
+            EscapeKind::Special(s) => out.write_str(s),
         }
     }
 }
 
-impl<W: Write, const QUOTE: bool> Write for HtmlEscape<W, QUOTE> {
+#[derive(Default)]
+struct XmlEscape<const QUOTE: bool> {}
+
+impl<const QUOTE: bool> Escape for XmlEscape<QUOTE> {
+    fn get_escape(&self, ch: char) -> Option<EscapeKind> {
+        match ch {
+            '&' => Some(EscapeKind::Special("&amp;")),
+            '<' => Some(EscapeKind::Special("&lt;")),
+            '>' => Some(EscapeKind::Special("&gt;")),
+            '"' if QUOTE => Some(EscapeKind::Special("&quot;")),
+            '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}' => Some(EscapeKind::Number(ch as u32)),
+            _ => None,
+        }
+    }
+
+    fn write_escape(&self, esc: EscapeKind, out: &mut impl Write) -> fmt::Result {
+        match esc {
+            EscapeKind::Number(num) => write!(out, "&#{num};"),
+            EscapeKind::Special(s) => out.write_str(s),
+        }
+    }
+}
+
+struct EscapeWriter<W, E> {
+    inner: W,
+    escape: E,
+}
+
+impl<W, E> EscapeWriter<W, E> {
+    fn new(inner: W) -> Self
+    where
+        E: Default,
+    {
+        Self {
+            inner,
+            escape: default(),
+        }
+    }
+}
+
+impl<W: Write, E: Escape> Write for EscapeWriter<W, E> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let last_match = s
             .char_indices()
-            .filter_map(|(idx, ch)| Some((idx, ch, Self::get_escape(ch)?)))
+            .filter_map(|(idx, ch)| Some((idx, ch, self.escape.get_escape(ch)?)))
             .try_fold(0, |last, (idx, ch, esc)| {
                 Ok({
                     let slice = s.get(last..idx).unwrap_or_default();
                     if !slice.is_empty() {
                         self.inner.write_str(slice)?;
                     }
-                    self.write_escape(esc)?;
+                    self.escape.write_escape(esc, &mut self.inner)?;
                     idx + ch.len_utf8()
                 })
             })?;
@@ -203,8 +263,8 @@ impl<W: Write, const QUOTE: bool> Write for HtmlEscape<W, QUOTE> {
     }
 
     fn write_char(&mut self, ch: char) -> fmt::Result {
-        match Self::get_escape(ch) {
-            Some(esc) => self.write_escape(esc),
+        match self.escape.get_escape(ch) {
+            Some(esc) => self.escape.write_escape(esc, &mut self.inner),
             None => self.inner.write_char(ch),
         }
     }
@@ -221,26 +281,54 @@ impl<'cx, Out> OutputContext<'cx, Out>
 where
     Out: Write,
 {
+    fn is_xml(&self) -> bool {
+        self.config.xml == Some(true)
+    }
+
     fn write_escape_unescape(&mut self, src: &str, quote: bool) -> OutputResult {
-        if quote {
-            write_unescaped(src, HtmlEscape::<_, true>::new(&mut *self.out))?;
+        if self.is_xml() {
+            if quote {
+                write_unescaped(src, EscapeWriter::<_, XmlEscape<true>>::new(&mut *self.out))
+            } else {
+                write_unescaped(
+                    src,
+                    EscapeWriter::<_, XmlEscape<false>>::new(&mut *self.out),
+                )
+            }
         } else {
-            write_unescaped(src, HtmlEscape::<_, false>::new(&mut *self.out))?;
+            if quote {
+                write_unescaped(
+                    src,
+                    EscapeWriter::<_, HtmlEscape<true>>::new(&mut *self.out),
+                )
+            } else {
+                write_unescaped(
+                    src,
+                    EscapeWriter::<_, HtmlEscape<false>>::new(&mut *self.out),
+                )
+            }
         }
-        Ok(())
+        .map_err(Into::into)
     }
     fn write_escape(&mut self, src: &str, quote: bool) -> OutputResult {
-        if quote {
-            HtmlEscape::<_, true>::new(&mut *self.out).write_str(src)?;
+        if self.is_xml() {
+            if quote {
+                EscapeWriter::<_, XmlEscape<true>>::new(&mut *self.out).write_str(src)
+            } else {
+                EscapeWriter::<_, XmlEscape<false>>::new(&mut *self.out).write_str(src)
+            }
         } else {
-            HtmlEscape::<_, false>::new(&mut *self.out).write_str(src)?;
+            if quote {
+                EscapeWriter::<_, HtmlEscape<true>>::new(&mut *self.out).write_str(src)
+            } else {
+                EscapeWriter::<_, HtmlEscape<false>>::new(&mut *self.out).write_str(src)
+            }
         }
-        Ok(())
+        .map_err(Into::into)
     }
 
     fn write_unescape(&mut self, src: &str) -> OutputResult {
-        write_unescaped(src, &mut *self.out)?;
-        Ok(())
+        write_unescaped(src, &mut *self.out).map_err(Into::into)
     }
 
     fn lowercase_str(&mut self, src: &str) -> &str {
@@ -257,7 +345,7 @@ where
             &self.string_buf,
             TagInfo {
                 ci: get_inference(tag, ci),
-                is_void: is_void(&self.string_buf),
+                is_void: !self.is_xml() && is_void(&self.string_buf),
             },
         )
     }
@@ -315,7 +403,12 @@ where
         out
     }
 
-    fn write_open_tag<'attr>(&mut self, tag: &str, selector: &Selector) -> OutputResult {
+    fn write_open_tag<'attr>(
+        &mut self,
+        tag: &str,
+        selector: &Selector,
+        self_close: bool,
+    ) -> OutputResult {
         let Selector {
             class_names,
             id,
@@ -353,6 +446,9 @@ where
             }
         }
 
+        if self_close {
+            self.out.write_char('/')?;
+        }
         self.out.write_char('>')?;
         Ok(())
     }
@@ -396,19 +492,23 @@ where
         };
         let (_, tag_info) = self.get_info(tag, ContentInference { mode, ..self.ci });
 
-        self.line(|this| this.write_open_tag(tag, &element.selector))?;
-        self.in_content(tag_info.ci, element.kind, |this| {
-            this.indent(|this| {
-                element
-                    .nodes
-                    .iter()
-                    .try_for_each(|node| this.process_node(node))
-            })?;
-            if !tag_info.is_void {
-                this.line(|this| this.write_close_tag(tag))?;
-            }
-            Ok(())
-        })
+        if element.nodes.len() == 0 && self.is_xml() {
+            self.line(|this| this.write_open_tag(tag, &element.selector, true))
+        } else {
+            self.line(|this| this.write_open_tag(tag, &element.selector, false))?;
+            self.in_content(tag_info.ci, element.kind, |this| {
+                this.indent(|this| {
+                    element
+                        .nodes
+                        .iter()
+                        .try_for_each(|node| this.process_node(node))
+                })?;
+                if !tag_info.is_void {
+                    this.line(|this| this.write_close_tag(tag))?;
+                }
+                Ok(())
+            })
+        }
     }
 
     fn process_node(&mut self, node: &Node) -> OutputResult {
@@ -531,8 +631,6 @@ section {
         {
             a
 
-
-            
             b
         }
         <( c )> <( d )>
