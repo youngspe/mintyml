@@ -1,3 +1,5 @@
+use core::fmt;
+
 pub fn default<T: Default>() -> T {
     T::default()
 }
@@ -86,4 +88,51 @@ impl<'src> From<&'src str> for StrCursor<'src> {
     fn from(src: &'src str) -> Self {
         Self::new(src)
     }
+}
+
+pub struct DisplayFn<F: Fn(&mut fmt::Formatter) -> fmt::Result>(pub F);
+
+impl<F> fmt::Display for DisplayFn<F>
+where
+    F: Fn(&mut fmt::Formatter) -> fmt::Result,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0(f)
+    }
+}
+
+impl<F> fmt::Debug for DisplayFn<F>
+where
+    F: Fn(&mut fmt::Formatter) -> fmt::Result,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0(f)
+    }
+}
+
+pub fn join_fmt<T>(
+    src: impl IntoIterator<Item = T> + Clone,
+    fmt: impl Fn(T, &mut fmt::Formatter) -> fmt::Result,
+    sep: impl fmt::Display,
+) -> impl fmt::Display {
+    DisplayFn(move |f| {
+        let src = src.clone();
+        let mut iter = src.into_iter();
+        let Some(first) = iter.next() else {
+            return Ok(());
+        };
+
+        fmt(first, f)?;
+        iter.try_for_each(|x| {
+            sep.fmt(f)?;
+            fmt(x, f)
+        })
+    })
+}
+
+pub fn join_display<T: fmt::Display>(
+    src: impl IntoIterator<Item = T> + Clone,
+    sep: impl fmt::Display,
+) -> impl fmt::Display {
+    join_fmt(src, |x, f| fmt::Display::fmt(&x, f), sep)
 }

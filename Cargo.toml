@@ -1,5 +1,5 @@
 [workspace]
-members = ["mintyml"]
+members = [ "minty-cli","mintyml"]
 resolver = "2"
 
 [workspace.package]

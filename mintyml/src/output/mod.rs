@@ -57,14 +57,18 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
         | "dialog" | "nav" => SECTION,
         "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "span" | "b" | "i" | "q" | "s" | "u" | "abbr"
         | "button" | "caption" | "cite" | "code" | "data" | "dd" | "details" | "dfn" | "dt"
-        | "em" | "figcaption" | "head" | "kbd" | "label" | "legend" | "mark" | "meter"
-        | "option" | "output" | "picture" | "pre" | "progress" | "samp" | "small" | "strong"
-        | "sub" | "summary" | "sup" | "textarea" | "td" | "th" | "time" | "var" => PARAGRAPH,
+        | "em" | "figcaption" | "kbd" | "label" | "legend" | "mark" | "meter" | "option"
+        | "output" | "picture" | "pre" | "progress" | "samp" | "small" | "strong" | "sub"
+        | "summary" | "sup" | "textarea" | "td" | "th" | "time" | "var" => PARAGRAPH,
         "ul" | "ol" | "menu" => ContentInference {
             block: "li",
             line: "li",
             paragraph: Some("li"),
             ..ci
+        },
+        "head" => ContentInference {
+            mode: ContentMode::Block,
+            ..PARAGRAPH
         },
         "li" => match ci.mode {
             ContentMode::Inline => PARAGRAPH,

@@ -1,14 +1,18 @@
+use core::fmt;
+use std::error;
+
 use alloc::{
     borrow::{Cow, ToOwned},
     vec,
     vec::Vec,
 };
 use gramma::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
+use thiserror::Error;
 
 use crate::{
     ast,
     escape::{escape_errors, EscapeError},
-    utils::default,
+    utils::{default, join_display, join_fmt, DisplayFn},
 };
 
 pub trait ToStatic {
@@ -187,10 +191,48 @@ pub enum ElementKind {
 struct BuildError {}
 
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Error)]
+#[error("{kind:?} at character {}", range.start.position)]
 pub struct SyntaxError {
     pub range: LocationRange,
     pub kind: SyntaxErrorKind,
+}
+
+impl SyntaxError {
+    pub(crate) fn display_with_src<'data>(
+        &'data self,
+        src: &'data str,
+    ) -> impl fmt::Display + 'data {
+        DisplayFn(move |f| {
+            let mut inner = |sample| {
+                match &self.kind {
+                    SyntaxErrorKind::Unknown => f.write_str("Unknown"),
+                    SyntaxErrorKind::InvalidEscape { .. } => {
+                        write!(f, "Invalid escape sequence {sample}.")
+                    }
+                    SyntaxErrorKind::ParseFailed { expected } => {
+                        write!(
+                            f,
+                            "Unexpected {sample}. Expected {}",
+                            join_display(expected.iter().map(|t| t.name()), " | ")
+                        )
+                    }
+                }?;
+
+                write!(f, " at character {}", self.range.start.position)
+            };
+
+            if self.range.start.position >= src.len() {
+                inner(format_args!("end-of-file"))
+            } else {
+                inner(format_args!(
+                    "{:?}",
+                    src.get(self.range.start.position..self.range.end.position)
+                        .unwrap_or_default()
+                ))
+            }
+        })
+    }
 }
 
 #[non_exhaustive]
