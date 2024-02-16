@@ -3,6 +3,8 @@
 extern crate alloc;
 extern crate either;
 extern crate gramma;
+
+#[cfg(feature = "std")]
 extern crate thiserror;
 
 pub(crate) mod ast;
@@ -17,18 +19,19 @@ use core::fmt;
 use ir::{Document, ToStatic};
 use output::OutputError;
 
-pub use ir::SyntaxError;
+pub use ir::{SyntaxError, SyntaxErrorKind};
 pub use output::OutputConfig;
 
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum ConvertError<'src> {
-    #[error("{}", utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; "))]
+    #[cfg_attr(feature = "std", error("{}", utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
     Syntax {
         syntax_errors: Vec<SyntaxError>,
         src: Cow<'src, str>,
     },
-    #[error("Unknown")]
+    #[cfg_attr(feature = "std", error("Unknown"))]
     Unknown,
 }
 

@@ -1,5 +1,4 @@
 use core::fmt;
-use std::error;
 
 use alloc::{
     borrow::{Cow, ToOwned},
@@ -7,12 +6,11 @@ use alloc::{
     vec::Vec,
 };
 use gramma::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
-use thiserror::Error;
 
 use crate::{
     ast,
     escape::{escape_errors, EscapeError},
-    utils::{default, join_display, join_fmt, DisplayFn},
+    utils::{default, join_display, DisplayFn},
 };
 
 pub trait ToStatic {
@@ -191,8 +189,8 @@ pub enum ElementKind {
 struct BuildError {}
 
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Error)]
-#[error("{kind:?} at character {}", range.start.position)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "std", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
 pub struct SyntaxError {
     pub range: LocationRange,
     pub kind: SyntaxErrorKind,

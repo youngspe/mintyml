@@ -1,0 +1,14 @@
+{
+  "name": "mintyml",
+  "version": "0.1.0",
+  "description": "",
+  "main": "src-ts/index.js",
+  "scripts": {
+    "build": "wasm-pack build && tsc"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Webpack App</title>
+  <template id="demo-container-template">
+    <style>
+      :host {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        align-content: stretch;
+      }
+
+      :host>output {
+        display: contents;
+      }
+
+      #text-in {
+        overflow: auto;
+        flex: 1 2 35ch;
+      }
+
+      #text-out {
+        overflow: auto;
+        flex: 1 2 35ch;
+      }
+
+      #view-out {
+        overflow: auto;
+        flex: 2 1 360px;
+      }
+    </style>
+    <textarea id="text-in">
+h1> Hello, world!
+
+This is a paragraph.
+
+ul {
+  This is a list item.
+
+  This is another item.
+  This is another part of the same item.
+}
+    </textarea>
+    <output>
+      <pre id="text-out"></pre>
+      <iframe id="view-out"></iframe>
+    </output>
+  </template>
+  <style id="theme">
+    *,
+    *::after,
+    *::before {
+      box-sizing: border-box;
+    }
+  </style>
+  <style>
+    main {
+      display: contents;
+    }
+
+    :root {
+      height: 100vh;
+    }
+
+    body {
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      height: 100%;
+      flex-flow: column;
+      justify-content: stretch;
+    }
+
+    demo-container {
+      flex: 1;
+      align-self: stretch;
+    }
+
+    .page-content {
+      width: 100%;
+      margin-inline: auto;
+      max-width: 1200px;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <demo-container class="page-content"></demo-container>
+  </main>
+</body>
+
+</html>

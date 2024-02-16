@@ -1,0 +1,4 @@
+/pkg
+/src-ts/**/*.js
+node_modules/**/*
+package-lock.json
