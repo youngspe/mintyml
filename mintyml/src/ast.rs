@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use gramma::{ast::Ignore, parse::LocationRange};
+use gramma::parse::LocationRange;
 
 gramma::define_token!(
     #[pattern(exact = ">")]
@@ -103,6 +103,40 @@ gramma::define_token!(
     pub struct OpenComment;
     #[pattern(exact = "!>")]
     pub struct CloseComment;
+
+    #[pattern(exact = "</")]
+    pub struct OpenEmphasis;
+    #[pattern(exact = "/>")]
+    pub struct CloseEmphasis;
+
+    #[pattern(exact = "<#")]
+    pub struct OpenStrong;
+    #[pattern(exact = "#>")]
+    pub struct CloseStrong;
+
+    #[pattern(exact = "<_")]
+    pub struct OpenUnderline;
+    #[pattern(exact = "_>")]
+    pub struct CloseUnderline;
+
+    #[pattern(exact = "<~")]
+    pub struct OpenStrike;
+    #[pattern(exact = "~>")]
+    pub struct CloseStrike;
+
+    #[pattern(exact = "<\"")]
+    pub struct OpenQuote;
+    #[pattern(exact = "\">")]
+    pub struct CloseQuote;
+
+    #[pattern(regex = r"(?s)<\[\[.*?\]\]>")]
+    pub struct Verbatim0;
+
+    #[pattern(regex = r"(?s)<\[#\[.*?@\]#\]>")]
+    pub struct Verbatim1;
+
+    #[pattern(regex = r"(?s)<\[##\[.*?\]##\]>")]
+    pub struct Verbatim2;
 );
 
 gramma::define_rule!(
@@ -120,8 +154,16 @@ gramma::define_rule!(
 
     pub enum TextLinePart {
         TextSegment { text: TextSegment },
+        Verbatim { verbatim: Verbatim },
+        InlineSpecial { inline_special: InlineSpecial },
         Inline { inline: Inline },
         Comment { comment: Comment },
+    }
+
+    pub enum Verbatim {
+        Verbatim0 { value: Verbatim0 },
+        Verbatim1 { value: Verbatim1 },
+        Verbatim2 { value: Verbatim2 },
     }
 
     pub struct Comment {
@@ -141,6 +183,35 @@ gramma::define_rule!(
         #[transform(ignore_around<Whitespace>)]
         pub inner: Option<Box<Node>>,
         pub close: CloseInline,
+    }
+
+    #[non_exhaustive]
+    pub enum InlineSpecial {
+        Emphasis {
+            open: OpenEmphasis,
+            inner: Nodes,
+            close: CloseEmphasis,
+        },
+        Strong {
+            open: OpenStrong,
+            inner: Nodes,
+            close: CloseStrong,
+        },
+        Underline {
+            open: OpenUnderline,
+            inner: Nodes,
+            close: CloseUnderline,
+        },
+        Strike {
+            open: OpenStrike,
+            inner: Nodes,
+            close: CloseStrike,
+        },
+        Quote {
+            open: OpenQuote,
+            inner: Nodes,
+            close: CloseQuote,
+        },
     }
 
     pub struct Paragraph {

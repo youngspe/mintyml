@@ -14,7 +14,7 @@ use alloc::{
 
 use crate::{
     escape::{unescape_parts, UnescapePart},
-    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement},
+    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement, SpecialKind},
     utils::default,
 };
 
@@ -137,6 +137,17 @@ struct TagInfo<'cx> {
 pub struct OutputConfig {
     pub indent: Option<Cow<'static, str>>,
     pub xml: Option<bool>,
+    pub special_tags: SpecialTagConfig,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Default, Clone)]
+pub struct SpecialTagConfig {
+    pub emphasis: Option<Cow<'static, str>>,
+    pub strong: Option<Cow<'static, str>>,
+    pub underline: Option<Cow<'static, str>>,
+    pub strike: Option<Cow<'static, str>>,
+    pub quote: Option<Cow<'static, str>>,
 }
 
 impl OutputConfig {
@@ -155,6 +166,26 @@ impl OutputConfig {
 
     pub fn xml(self, xml: bool) -> Self {
         self.update(|c| c.xml = Some(xml))
+    }
+
+    pub fn emphasis_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.emphasis = Some(tag.into()))
+    }
+
+    pub fn strong_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.strong = Some(tag.into()))
+    }
+
+    pub fn underline_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.underline = Some(tag.into()))
+    }
+
+    pub fn strike_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.strike = Some(tag.into()))
+    }
+
+    pub fn quote_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.quote = Some(tag.into()))
     }
 }
 
@@ -464,15 +495,29 @@ where
 
     fn process_element(&mut self, element: &Element) -> OutputResult {
         let Some(tag) = (match (&element.selector.element, &element.kind) {
-            (SelectorElement::Name(s), _) => Some(&**s),
-            (SelectorElement::Infer, ElementKind::Block) => Some(self.ci.block),
-            (SelectorElement::Infer, ElementKind::Inline) => Some(self.ci.inline),
+            (SelectorElement::Name(s), _) => Some(match *s {
+                Cow::Borrowed(s) => Cow::Borrowed(s),
+                Cow::Owned(ref s) => Cow::Borrowed(s as &str),
+            }),
+            (SelectorElement::Special(kind), _) => {
+                let special_tags = &self.config.special_tags;
+                let (custom, default) = match kind {
+                    SpecialKind::Emphasis => (&special_tags.emphasis, "em"),
+                    SpecialKind::Strong => (&special_tags.strong, "strong"),
+                    SpecialKind::Underline => (&special_tags.underline, "u"),
+                    SpecialKind::Strike => (&special_tags.strike, "s"),
+                    SpecialKind::Quote => (&special_tags.quote, "q"),
+                };
+                Some(custom.as_ref().cloned().unwrap_or(default.into()))
+            }
+            (SelectorElement::Infer, ElementKind::Block) => Some(self.ci.block.into()),
+            (SelectorElement::Infer, ElementKind::Inline) => Some(self.ci.inline.into()),
             (SelectorElement::Infer, ElementKind::Line | ElementKind::LineBlock) => {
-                Some(self.ci.line)
+                Some(self.ci.line.into())
             }
             (SelectorElement::Infer, ElementKind::Paragraph) => match self.element_kind {
                 ElementKind::Line | ElementKind::LineBlock => None,
-                _ => self.ci.paragraph,
+                _ => self.ci.paragraph.map(Cow::Borrowed),
             },
         }) else {
             return self.in_content(
@@ -494,12 +539,12 @@ where
             ElementKind::Block => self.ci.mode,
             _ => ContentMode::Inline,
         };
-        let (_, tag_info) = self.get_info(tag, ContentInference { mode, ..self.ci });
+        let (_, tag_info) = self.get_info(&tag, ContentInference { mode, ..self.ci });
 
         if element.nodes.len() == 0 && self.is_xml() {
-            self.line(|this| this.write_open_tag(tag, &element.selector, true))
+            self.line(|this| this.write_open_tag(&tag, &element.selector, true))
         } else {
-            self.line(|this| this.write_open_tag(tag, &element.selector, false))?;
+            self.line(|this| this.write_open_tag(&tag, &element.selector, false))?;
             self.in_content(tag_info.ci, element.kind, |this| {
                 this.indent(|this| {
                     element
@@ -508,7 +553,7 @@ where
                         .try_for_each(|node| this.process_node(node))
                 })?;
                 if !tag_info.is_void {
-                    this.line(|this| this.write_close_tag(tag))?;
+                    this.line(|this| this.write_close_tag(&tag))?;
                 }
                 Ok(())
             })
@@ -516,17 +561,23 @@ where
     }
 
     fn process_node(&mut self, node: &Node) -> OutputResult {
-        match node {
-            Node::Element(e) => self.process_element(e),
-            Node::Text(s) if s.is_empty() => Ok(()),
-            Node::Text(s) => self.write_escape_unescape(s, false),
+        Ok(match node {
+            Node::Element(e) => self.process_element(e)?,
+            Node::Text { value, .. } if value.is_empty() => {}
+            Node::Text {
+                value,
+                escape: true,
+            } => self.write_escape_unescape(value, false)?,
+            Node::Text {
+                value,
+                escape: false,
+            } => self.out.write_str(value)?,
             Node::Comment(s) => {
                 self.out.write_str("<!--")?;
                 self.write_escape(s, false)?;
                 self.out.write_str("-->")?;
-                Ok(())
             }
-        }
+        })
     }
 }
 

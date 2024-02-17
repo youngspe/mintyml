@@ -71,7 +71,7 @@ impl<'src> ToStatic for Document<'src> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Node<'src> {
     Element(Element<'src>),
-    Text(Cow<'src, str>),
+    Text { value: Cow<'src, str>, escape: bool },
     Comment(Cow<'src, str>),
 }
 
@@ -87,7 +87,10 @@ impl<'src> ToStatic for Node<'src> {
     fn to_static(self) -> Self::Static {
         match self {
             Node::Element(x) => Node::Element(x.to_static()),
-            Node::Text(x) => Node::Text(x.to_static()),
+            Node::Text { value, escape } => Node::Text {
+                value: value.to_static(),
+                escape,
+            },
             Node::Comment(x) => Node::Comment(x.to_static()),
         }
     }
@@ -160,10 +163,12 @@ impl<'src> ToStatic for Attribute<'src> {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum SelectorElement<'src> {
     #[default]
     Infer,
     Name(Cow<'src, str>),
+    Special(SpecialKind),
 }
 
 impl<'src> ToStatic for SelectorElement<'src> {
@@ -172,6 +177,7 @@ impl<'src> ToStatic for SelectorElement<'src> {
         match self {
             SelectorElement::Infer => SelectorElement::Infer,
             SelectorElement::Name(x) => SelectorElement::Name(x.to_static()),
+            SelectorElement::Special(x) => SelectorElement::Special(x),
         }
     }
 }
@@ -427,7 +433,12 @@ fn build_text_line<'src>(
         .flat_map(|(space, part)| {
             space
                 .as_ref()
-                .map(|_| Ok(Node::Text(" ".into())))
+                .map(|_| {
+                    Ok(Node::Text {
+                        value: " ".into(),
+                        escape: false,
+                    })
+                })
                 .into_iter()
                 .chain([build_text_line_part(part, cx)])
         })
@@ -437,13 +448,77 @@ fn build_text_line<'src>(
         })
 }
 
+fn build_verbatim_text<'src>(
+    v: &ast::Verbatim,
+    cx: &mut BuildContext<'src>,
+) -> BuildResult<Node<'src>> {
+    let (mut range, trim) = match v {
+        ast::Verbatim::Verbatim0 { value, .. } => (value.range, 3),
+        ast::Verbatim::Verbatim1 { value, .. } => (value.range, 4),
+        ast::Verbatim::Verbatim2 { value, .. } => (value.range, 5),
+    };
+
+    range.start += trim;
+    range.end -= trim;
+
+    Ok(Node::Text {
+        value: cx.slice(range),
+        escape: false,
+    })
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SpecialKind {
+    Emphasis,
+    Strong,
+    Underline,
+    Strike,
+    Quote,
+}
+
+fn build_inline_special<'src>(
+    special: &ast::InlineSpecial,
+    cx: &mut BuildContext<'src>,
+) -> BuildResult<Node<'src>> {
+    use ast::InlineSpecial::*;
+    let (Emphasis { inner, .. }
+    | Strong { inner, .. }
+    | Underline { inner, .. }
+    | Strike { inner, .. }
+    | Quote { inner, .. }) = special;
+
+    let kind = match special {
+        Emphasis { .. } => SpecialKind::Emphasis,
+        Strong { .. } => SpecialKind::Strong,
+        Underline { .. } => SpecialKind::Underline,
+        Strike { .. } => SpecialKind::Strike,
+        Quote { .. } => SpecialKind::Quote,
+    };
+
+    Ok(Element {
+        selector: Selector {
+            element: SelectorElement::Special(kind),
+            ..default()
+        },
+        nodes: nodes_from_ast(cx, &inner.nodes)?,
+        kind: ElementKind::Inline,
+    })
+    .map(Node::Element)
+}
+
 fn build_text_line_part<'src>(
     part: &ast::TextLinePart,
     cx: &mut BuildContext<'src>,
 ) -> Result<Node<'src>, BuildError> {
+    use ast::TextLinePart::*;
     match part {
-        ast::TextLinePart::TextSegment { text } => Ok(Node::Text(cx.escapable_slice(text.range)?)),
-        ast::TextLinePart::Inline {
+        Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
+        TextSegment { text } => Ok(Node::Text {
+            value: cx.escapable_slice(text.range)?,
+            escape: true,
+        }),
+        Inline {
             inline: ast::Inline {
                 inner: Some(node), ..
             },
@@ -466,7 +541,7 @@ fn build_text_line_part<'src>(
             .into()),
             ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
         },
-        ast::TextLinePart::Inline {
+        Inline {
             inline: ast::Inline { inner: None, .. },
         } => Ok(Element {
             selector: default(),
@@ -474,7 +549,8 @@ fn build_text_line_part<'src>(
             kind: ElementKind::Inline,
         }
         .into()),
-        ast::TextLinePart::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+        InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
+        Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
     }
 }
 
@@ -486,7 +562,10 @@ fn build_paragraph<'src>(
     build_text_line(cx, &paragraph.line1, &mut nodes)?;
 
     for line in &paragraph.lines {
-        nodes.push(Node::Text(" ".into()));
+        nodes.push(Node::Text {
+            value: " ".into(),
+            escape: false,
+        });
         build_text_line(cx, line, &mut nodes)?;
     }
 

@@ -8,45 +8,139 @@
     <style>
       :host {
         display: flex;
-        flex-wrap: wrap;
+        flex-flow: row wrap;
         align-items: stretch;
         align-content: stretch;
+        justify-content: stretch;
       }
 
       :host>output {
         display: contents;
       }
 
-      #text-in {
-        overflow: auto;
-        flex: 1 2 35ch;
+      #text-in-wrapper {
+        flex: 1 1 50ch;
       }
 
+      #text-out-wrapper {
+        flex: 1 1 30ch;
+      }
+
+      #view-out-wrapper {
+        flex: 1 1 15rem;
+      }
+
+      #text-in {
+        resize: none;
+      }
+
+      #text-in,
       #text-out {
         overflow: auto;
-        flex: 1 2 35ch;
+        text-wrap: nowrap;
+        margin: 0;
+        padding: 1rem;
       }
 
       #view-out {
-        overflow: auto;
-        flex: 2 1 360px;
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      #text-in-wrapper,
+      #text-out-wrapper,
+      #view-out-wrapper {
+        overflow: visible;
+        position: relative;
+        width: 0;
+      }
+
+      #text-in-wrapper>*,
+      #text-out-wrapper>*,
+      #view-out-wrapper>* {
+        display: flex;
+        flex-flow: column;
+        justify-content: stretch;
+        position: absolute;
+        inset: 1rem;
+
+        margin: 0;
+        overflow: hidden;
+        border-radius: 1rem;
+        box-shadow: 0.5rem 0 3rem var(--color-shadow);
+        border: 0.15rem solid var(--color-shadow);
+      }
+
+      #text-in-wrapper>*>h2,
+      #text-out-wrapper>*>h2,
+      #view-out-wrapper>*>h2 {
+        text-align: center;
+      }
+
+      #text-in-wrapper>*>*+*,
+      #text-out-wrapper>*>*+*,
+      #view-out-wrapper>*>*+* {
+        flex: 1 1 auto;
       }
     </style>
-    <textarea id="text-in">
-h1> Hello, world!
+    <div id="text-in-wrapper">
+      <section>
+        <h2>MinTyML Input</h2>
+        <textarea id="text-in">h1> Hello, world!
 
-This is a paragraph.
+section {
+  h2> Section 1
 
-ul {
-  This is a list item.
+  This is a paragraph.
 
-  This is another item.
-  This is another part of the same item.
+  ul {
+    This is a list item.
+
+    This is another item.
+    This is another part of the same item.
+  }
 }
-    </textarea>
+section {
+  h2> Section
+
+  This paragraph has &lt;/emphasized/> text, &lt;#strong#> text,
+  and <_underlined_> text.
+
+  This paragraph has &lt;~strikethrough~> text and &lt;"quoted"> text.
+
+  blockquote {
+    This is a block quote.
+
+    This is another paragraph in the quote.
+  }
+
+  style> &lt;[[
+  /* Use a verbatim segment to avoid conversion to HTML */
+  #my-button {
+    font-size: 2rem;
+  }
+  ]]>
+
+  button#my-button> Click here!
+}
+        </textarea>
+      </section>
+    </div>
     <output>
-      <pre id="text-out"></pre>
-      <iframe id="view-out"></iframe>
+      <div id="text-out-wrapper">
+        <section>
+          <h2>HTML Output</h2>
+          <pre id="text-out"></pre>
+        </section>
+
+      </div>
+      <div id="view-out-wrapper">
+        <section>
+          <h2>Preview</h2>
+          <div><iframe id="view-out"></iframe></div>
+        </section>
+      </div>
     </output>
   </template>
   <style id="theme">
@@ -54,6 +148,37 @@ ul {
     *::after,
     *::before {
       box-sizing: border-box;
+      scrollbar-color: var(--color-fg) var(--color-bg);
+    }
+
+    textarea {
+      background: inherit;
+      color: inherit;
+      outline: none;
+      border: none;
+    }
+
+    :root {
+      --color-fg: #000000;
+      --color-bg: #e0e0e0;
+      --color-shadow: #00000060;
+      background-color: var(--color-bg);
+      color: var(--color-fg);
+    }
+
+
+    @media(prefers-color-scheme: dark) {
+      :root {
+        --color-fg: #f0f0f0;
+        --color-bg: #040c20;
+        --color-shadow: #000000ff;
+      }
+    }
+
+    blockquote {
+      border-left: 2px solid currentColor;
+      margin-inline: 0;
+      padding-inline-start: 2ch;
     }
   </style>
   <style>
@@ -80,9 +205,8 @@ ul {
     }
 
     .page-content {
-      width: 100%;
+      width: 95%;
       margin-inline: auto;
-      max-width: 1200px;
     }
   </style>
 </head>

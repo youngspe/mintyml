@@ -19,13 +19,14 @@ customElements.define('demo-container', class DemoContainerElement extends HTMLE
 
         let shadowRoot = this.attachShadow({ mode: 'open' })
         shadowRoot.append(template.content.cloneNode(true))
-        if (theme) {
-            shadowRoot.append(theme.cloneNode(false))
-        }
         this._input = shadowRoot.getElementById('text-in') as HTMLTextAreaElement
         this._textOutput = shadowRoot.getElementById('text-out') as HTMLElement
         this._viewOutput = shadowRoot.getElementById('view-out') as HTMLIFrameElement
         this._input.onchange = this._input.oninput = () => this._update()
+        if (theme) {
+            shadowRoot.append(theme.cloneNode(true))
+            this._viewOutput.contentDocument!.head.appendChild(theme.cloneNode(true))
+        }
     }
 
     connectedCallback() {
@@ -66,7 +67,7 @@ customElements.define('demo-container', class DemoContainerElement extends HTMLE
 
         this._sent = now
         worker.postMessage({
-            input: this._input.value,
+            input: this._input.value ?? "",
         } satisfies ConvertRequestMessage)
     }
 

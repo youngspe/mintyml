@@ -48,3 +48,27 @@ fn simple_doc_xml() {
         )
     );
 }
+
+#[test]
+fn special_tags() {
+    let src = r#"
+        section {
+            Abc </def/><#ghi#>?
+            <_jkl_>
+
+            mno <~pqr <"stu"> vwx~> yz
+        }
+    "#;
+
+    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<section>"#,
+            r#"<p>Abc <em>def</em><strong>ghi</strong>? <u>jkl</u></p>"#,
+            r#"<p>mno <s>pqr <q>stu</q> vwx</s> yz</p>"#,
+            r#"</section>"#,
+        )
+    )
+}
