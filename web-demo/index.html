@@ -4,151 +4,106 @@
 <head>
   <meta charset="utf-8" />
   <title>Webpack App</title>
-  <template id="demo-container-template">
-    <style>
-      :host {
-        display: flex;
-        flex-flow: row wrap;
-        align-items: stretch;
-        align-content: stretch;
-        justify-content: stretch;
-      }
+  <style>
+    demo-container {
+      display: flex;
+      flex-flow: row wrap;
+      align-items: stretch;
+      align-content: stretch;
+      justify-content: stretch;
+    }
 
-      :host>output {
-        display: contents;
-      }
+    demo-container>output {
+      display: contents;
+    }
 
-      #text-in-wrapper {
-        flex: 1 1 50ch;
-      }
+    #text-in-wrapper {
+      flex: 1 1 50ch;
+    }
 
-      #text-out-wrapper {
-        flex: 1 1 30ch;
-      }
+    #text-out-wrapper {
+      flex: 1 1 30ch;
+    }
 
-      #view-out-wrapper {
-        flex: 1 1 15rem;
-      }
+    #view-out-wrapper {
+      flex: 1 1 15rem;
+    }
 
-      #text-in {
-        resize: none;
-      }
+    #text-in {
+      resize: none;
+      background: none;
+      max-height: 100%;
+    }
 
-      #text-in,
-      #text-out {
-        overflow: auto;
-        text-wrap: nowrap;
-        margin: 0;
-        padding: 1rem;
-      }
+    #editor,
+    #viewer {
+      height: 100%;
+      width: 100%;
+      position: relative;
+      margin: 0;
+    }
 
-      #view-out {
-        width: 100%;
-        height: 100%;
-        border: none;
-      }
+    #text-in,
+    #text-out {
+      text-wrap: nowrap;
+      margin: 0;
+    }
 
-      #text-in-wrapper,
-      #text-out-wrapper,
-      #view-out-wrapper {
-        overflow: visible;
-        position: relative;
-        width: 0;
-      }
+    #view-out {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      padding-inline: 1rem;
+      padding-block: 0.5rem;
+    }
 
-      #text-in-wrapper>*,
-      #text-out-wrapper>*,
-      #view-out-wrapper>* {
-        display: flex;
-        flex-flow: column;
-        justify-content: stretch;
-        position: absolute;
-        inset: 1rem;
+    #text-in-wrapper,
+    #text-out-wrapper,
+    #view-out-wrapper {
+      overflow: visible;
+      position: relative;
+      width: 0;
+      margin: 0.5rem;
+    }
 
-        margin: 0;
-        overflow: hidden;
-        border-radius: 1rem;
-        box-shadow: 0.5rem 0 3rem var(--color-shadow);
-        border: 0.15rem solid var(--color-shadow);
-      }
+    #text-in-wrapper>*,
+    #text-out-wrapper>*,
+    #view-out-wrapper>* {
+      display: flex;
+      flex-flow: column;
+      justify-content: stretch;
+      position: absolute;
+      width: 100%;
+      height: 100%;
 
-      #text-in-wrapper>*>h2,
-      #text-out-wrapper>*>h2,
-      #view-out-wrapper>*>h2 {
-        text-align: center;
-      }
+      margin: 0;
+      overflow: hidden;
+      border-radius: 1rem;
+      box-shadow: 0.5rem 0 2rem -0.5rem var(--color-shadow);
+    }
 
-      #text-in-wrapper>*>*+*,
-      #text-out-wrapper>*>*+*,
-      #view-out-wrapper>*>*+* {
-        flex: 1 1 auto;
-      }
-    </style>
-    <div id="text-in-wrapper">
-      <section>
-        <h2>MinTyML Input</h2>
-        <textarea id="text-in">h1> Hello, world!
+    #text-in-wrapper>*>h2,
+    #text-out-wrapper>*>h2,
+    #view-out-wrapper>*>h2 {
+      text-align: center;
+      margin-block: 0.25rem;
+    }
 
-section {
-  h2> Section 1
-
-  This is a paragraph.
-
-  ul {
-    This is a list item.
-
-    This is another item.
-    This is another part of the same item.
-  }
-}
-section {
-  h2> Section
-
-  This paragraph has &lt;/emphasized/> text, &lt;#strong#> text,
-  and <_underlined_> text.
-
-  This paragraph has &lt;~strikethrough~> text and &lt;"quoted"> text.
-
-  blockquote {
-    This is a block quote.
-
-    This is another paragraph in the quote.
-  }
-
-  style> &lt;[[
-  /* Use a verbatim segment to avoid conversion to HTML */
-  #my-button {
-    font-size: 2rem;
-  }
-  ]]>
-
-  button#my-button> Click here!
-}
-        </textarea>
-      </section>
-    </div>
-    <output>
-      <div id="text-out-wrapper">
-        <section>
-          <h2>HTML Output</h2>
-          <pre id="text-out"></pre>
-        </section>
-
-      </div>
-      <div id="view-out-wrapper">
-        <section>
-          <h2>Preview</h2>
-          <div><iframe id="view-out"></iframe></div>
-        </section>
-      </div>
-    </output>
-  </template>
+    #text-in-wrapper>*>*+*,
+    #text-out-wrapper>*>*+*,
+    #view-out-wrapper>*>*+* {
+      flex: 1 1 auto;
+    }
+  </style>
   <style id="theme">
     *,
     *::after,
     *::before {
       box-sizing: border-box;
-      scrollbar-color: var(--color-fg) var(--color-bg);
+    }
+
+    * {
+      scrollbar-color: var(--color-scrollbar) var(--color-bg);
     }
 
     textarea {
@@ -160,19 +115,40 @@ section {
 
     :root {
       --color-fg: #000000;
-      --color-bg: #e0e0e0;
-      --color-shadow: #00000060;
-      background-color: var(--color-bg);
-      color: var(--color-fg);
+      --color-bg: #FDF6E3;
+      --color-accent: #859900;
+      --color-shadow: #00000038;
+      --color-scrollbar: #586E75;
     }
 
 
     @media(prefers-color-scheme: dark) {
       :root {
         --color-fg: #f0f0f0;
-        --color-bg: #040c20;
-        --color-shadow: #000000ff;
+        --color-bg: #002B36;
+        --color-accent: #859900;
+        --color-shadow: #000000c0;
+        --color-scrollbar: #839496;
       }
+    }
+
+    a {
+      color: var(--color-accent);
+      text-decoration: none;
+    }
+
+    a:hover,
+    a:focus {
+      text-decoration: underline;
+    }
+
+    button {
+      background-color: var(--color-bg);
+      box-shadow: 0 0.25rem 1.5rem -0.25rem var(--color-shadow);
+      color: var(--color-accent);
+      border: 1px solid var(--color-accent);
+      padding-inline: 0.5rem;
+      border-radius: 1rem;
     }
 
     blockquote {
@@ -188,6 +164,11 @@ section {
 
     :root {
       height: 100vh;
+      min-height: 50rem;
+      max-height: 200rem;
+      min-width: 30rem;
+      background-color: var(--color-bg);
+      color: var(--color-fg);
     }
 
     body {
@@ -213,7 +194,72 @@ section {
 
 <body>
   <main>
-    <demo-container class="page-content"></demo-container>
+    <demo-container class="page-content">
+      <div id="text-in-wrapper">
+        <section>
+          <h2>MinTyML Input</h2>
+          <div id="text-in">
+            <pre id="editor">
+h1> Hello, world!
+
+section {
+  h2> Section 1
+
+  This is a paragraph.
+
+  ul {
+    This is a list item.
+
+    This is another item.
+    This is another part of the same item.
+  }
+}
+section {
+  h2> Section
+
+  This paragraph has &lt;/emphasized/> text, &lt;#strong#> text,
+  and &lt;_underlined_> text.
+
+  This paragraph has &lt;~strikethrough~> text and &lt;"quoted"> text.
+
+  blockquote {
+    This is a block quote.
+
+    This is another paragraph in the quote.
+  }
+
+  style> &lt;[[
+  /* Use a verbatim segment to avoid conversion to HTML */
+    #my-button {
+    font-size: 2rem;
+  }
+  ]]>
+
+  >a[href=#]> Click here!
+
+  >button#my-button> Click here!
+}</pre>
+          </div>
+        </section>
+      </div>
+      <output>
+        <div id="text-out-wrapper">
+          <section>
+            <h2>HTML Output</h2>
+            <div id="text-out">
+              <div id="viewer"></div>
+            </div>
+          </section>
+
+        </div>
+        <div id="view-out-wrapper">
+          <section>
+            <h2>Preview</h2>
+            <div id="view-out"></div>
+          </section>
+        </div>
+      </output>
+    </demo-container>
   </main>
 </body>
 
