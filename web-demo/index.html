@@ -18,21 +18,18 @@
     }
 
     #text-in-wrapper {
-      flex: 1 1 50ch;
+      flex: 1 1 50rch;
+      min-width: calc(min(100%, 30rch));
     }
 
     #text-out-wrapper {
-      flex: 1 1 30ch;
+      flex: 1 1 30rch;
+      min-width: calc(min(100%, 20rch));
     }
 
     #view-out-wrapper {
-      flex: 1 1 15rem;
-    }
-
-    #text-in {
-      resize: none;
-      background: none;
-      max-height: 100%;
+      flex: 1 1 40rch;
+      min-width: calc(min(100%, 40rch));
     }
 
     #editor,
@@ -41,6 +38,8 @@
       width: 100%;
       position: relative;
       margin: 0;
+      font-size: 0.8rem;
+      color: var(--color-fg-2);
     }
 
     #text-in,
@@ -50,11 +49,9 @@
     }
 
     #view-out {
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      padding-inline: 1rem;
-      padding-block: 0.5rem;
+      overflow: overlay;
+      padding-block-end: 1rem;
+      padding-inline: 0.5rem;
     }
 
     #text-in-wrapper,
@@ -103,14 +100,11 @@
     }
 
     * {
-      scrollbar-color: var(--color-scrollbar) var(--color-bg);
+      scrollbar-color: var(--color-fg-2) var(--color-bg);
     }
 
-    textarea {
-      background: inherit;
-      color: inherit;
-      outline: none;
-      border: none;
+    view-output>* {
+      min-width: 36rch;
     }
 
     :root {
@@ -118,7 +112,7 @@
       --color-bg: #FDF6E3;
       --color-accent: #859900;
       --color-shadow: #00000038;
-      --color-scrollbar: #586E75;
+      --color-fg-2: #586E75;
     }
 
 
@@ -128,9 +122,21 @@
         --color-bg: #002B36;
         --color-accent: #859900;
         --color-shadow: #000000c0;
-        --color-scrollbar: #839496;
+        --color-fg-2: #839496;
       }
     }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      color: var(--color-fg-2);
+      margin-block-start: 0.125em;
+      margin-block-end: 0.25em;
+    }
+
 
     a {
       color: var(--color-accent);
@@ -138,23 +144,37 @@
     }
 
     a:hover,
-    a:focus {
+    a:focus-visible {
+      text-decoration: underline;
+    }
+
+    a:visited {
+      color: var(--color-fg-2);
       text-decoration: underline;
     }
 
     button {
       background-color: var(--color-bg);
-      box-shadow: 0 0.25rem 1.5rem -0.25rem var(--color-shadow);
-      color: var(--color-accent);
-      border: 1px solid var(--color-accent);
+      box-shadow: 0 0.2rem 1rem -0.25rem var(--color-shadow);
+      color: var(--color-fg);
+      border: 1px solid currentColor;
       padding-inline: 0.5rem;
       border-radius: 1rem;
+    }
+
+    button:hover,
+    button:focus-visible {
+      box-shadow: 0 0.25rem 1.5rem -0.25rem var(--color-shadow);
+    }
+
+    button:active {
+      box-shadow: 0 0.25rem 1.5rem -0.25rem var(--color-shadow) inset;
     }
 
     blockquote {
       border-left: 2px solid currentColor;
       margin-inline: 0;
-      padding-inline-start: 2ch;
+      padding-inline-start: 2rch;
     }
   </style>
   <style>
@@ -166,7 +186,7 @@
       height: 100vh;
       min-height: 50rem;
       max-height: 200rem;
-      min-width: 30rem;
+      min-width: 20rch;
       background-color: var(--color-bg);
       color: var(--color-fg);
     }
@@ -193,14 +213,16 @@
 </head>
 
 <body>
+  <header>
+    <h1>MinTyML Demo</h1>
+  </header>
   <main>
     <demo-container class="page-content">
       <div id="text-in-wrapper">
         <section>
           <h2>MinTyML Input</h2>
           <div id="text-in">
-            <pre id="editor">
-h1> Hello, world!
+            <pre id="editor"><script type="text/plain" href="./example.txt" style="display:contents">h1> Hello, world!
 
 section {
   h2> Section 1
@@ -217,10 +239,10 @@ section {
 section {
   h2> Section
 
-  This paragraph has &lt;/emphasized/> text, &lt;#strong#> text,
-  and &lt;_underlined_> text.
+  This paragraph has </emphasized/> text, <#strong#> text,
+  and <_underlined_> text.
 
-  This paragraph has &lt;~strikethrough~> text and &lt;"quoted"> text.
+  This paragraph has <~strikethrough~> text and <"quoted"> text.
 
   blockquote {
     This is a block quote.
@@ -228,7 +250,7 @@ section {
     This is another paragraph in the quote.
   }
 
-  style> &lt;[[
+  style> <[[
   /* Use a verbatim segment to avoid conversion to HTML */
     #my-button {
     font-size: 2rem;
@@ -238,7 +260,8 @@ section {
   >a[href=#]> Click here!
 
   >button#my-button> Click here!
-}</pre>
+}
+</script></pre>
           </div>
         </section>
       </div>
