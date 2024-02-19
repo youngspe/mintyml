@@ -34,6 +34,18 @@ pub struct ContentInference<'lt> {
     pub line: &'lt str,
     pub inline: &'lt str,
     pub paragraph: Option<&'lt str>,
+    pub is_raw: bool,
+}
+
+impl<'lt> ContentInference<'lt> {
+    const DEFAULT: ContentInference<'static> = ContentInference {
+        mode: ContentMode::Block,
+        block: "div",
+        line: "p",
+        inline: "span",
+        paragraph: None,
+        is_raw: false,
+    };
 }
 
 fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<'cx> {
@@ -43,6 +55,7 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
         line: "p",
         inline: "span",
         paragraph: Some("p"),
+        ..ContentInference::DEFAULT
     };
     const PARAGRAPH: ContentInference = ContentInference {
         mode: ContentMode::Inline,
@@ -50,25 +63,27 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
         line: "span",
         inline: "span",
         paragraph: None,
+        ..ContentInference::DEFAULT
     };
 
     match tag {
         "div" | "section" | "article" | "header" | "footer" | "main" | "hgroup" | "body"
         | "dialog" | "nav" => SECTION,
         "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "span" | "b" | "i" | "q" | "s" | "u" | "abbr"
-        | "button" | "caption" | "cite" | "code" | "data" | "dd" | "details" | "dfn" | "dt"
-        | "em" | "figcaption" | "kbd" | "label" | "legend" | "mark" | "meter" | "option"
-        | "output" | "picture" | "pre" | "progress" | "samp" | "small" | "strong" | "sub"
-        | "summary" | "sup" | "textarea" | "td" | "th" | "time" | "var" => PARAGRAPH,
+        | "button" | "caption" | "cite" | "code" | "data" | "dd" | "dfn" | "dt" | "em"
+        | "figcaption" | "kbd" | "legend" | "mark" | "meter" | "option" | "output" | "picture"
+        | "pre" | "progress" | "samp" | "small" | "strong" | "sub" | "summary" | "sup"
+        | "textarea" | "td" | "th" | "time" | "var" => PARAGRAPH,
         "ul" | "ol" | "menu" => ContentInference {
             block: "li",
             line: "li",
+            inline: "li",
             paragraph: Some("li"),
             ..ci
         },
         "head" => ContentInference {
             mode: ContentMode::Block,
-            ..PARAGRAPH
+            ..default()
         },
         "li" => match ci.mode {
             ContentMode::Inline => PARAGRAPH,
@@ -78,8 +93,10 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
             },
         },
         "datalist" | "optgroup" | "select" => ContentInference {
+            mode: ContentMode::Block,
             block: "option",
             line: "option",
+            inline: "option",
             paragraph: Some("option"),
             ..ci
         },
@@ -87,12 +104,14 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
             mode: ContentMode::Block,
             block: "tr",
             line: "tr",
-            inline: "td",
+            inline: "tr",
             paragraph: Some("tr"),
+            ..default()
         },
         "tr" => ContentInference {
             block: "td",
             line: "td",
+            inline: "td",
             paragraph: Some("td"),
             ..SECTION
         },
@@ -100,18 +119,45 @@ fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<
             block: "col",
             line: "col",
             inline: "col",
-            ..PARAGRAPH
+            ..default()
         },
         "dl" => ContentInference {
+            mode: ContentMode::Block,
             block: "dd",
-            line: "dd",
+            line: "dt",
+            inline: "dt",
             paragraph: Some("dd"),
             ..ci
         },
         "map" => ContentInference {
+            mode: ContentMode::Block,
             block: "area",
             line: "area",
             inline: "area",
+            ..default()
+        },
+        "details" => match ci.mode {
+            ContentMode::Inline => ContentInference {
+                mode: ContentMode::Block,
+                block: "summary",
+                line: "summary",
+                inline: "summary",
+                ..PARAGRAPH
+            },
+            _ => ContentInference {
+                mode: ContentMode::Block,
+                block: "summary",
+                line: "summary",
+                inline: "summary",
+                ..ci
+            },
+        },
+        "script" | "style" => ContentInference {
+            is_raw: true,
+            ..Default::default()
+        },
+        "label" => ContentInference {
+            line: "input",
             ..PARAGRAPH
         },
         _ => ci,
@@ -148,6 +194,7 @@ pub struct SpecialTagConfig {
     pub underline: Option<Cow<'static, str>>,
     pub strike: Option<Cow<'static, str>>,
     pub quote: Option<Cow<'static, str>>,
+    pub code: Option<Cow<'static, str>>,
 }
 
 impl OutputConfig {
@@ -187,6 +234,10 @@ impl OutputConfig {
     pub fn quote_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
         self.update(|c| c.special_tags.quote = Some(tag.into()))
     }
+
+    pub fn code_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.code = Some(tag.into()))
+    }
 }
 
 struct OutputContext<'cx, Out> {
@@ -197,6 +248,7 @@ struct OutputContext<'cx, Out> {
     ci: ContentInference<'cx>,
     element_kind: ElementKind,
     first_line: bool,
+    first_child: bool,
 }
 
 trait Escape {
@@ -432,9 +484,11 @@ where
     ) -> OutputResult<T> {
         mem::swap(&mut ci, &mut self.ci);
         mem::swap(&mut element_kind, &mut self.element_kind);
+        let was_first = mem::replace(&mut self.first_child, true);
         let out = f(self);
-        mem::swap(&mut ci, &mut self.ci);
-        mem::swap(&mut element_kind, &mut self.element_kind);
+        self.first_child = was_first;
+        self.ci = ci;
+        self.element_kind = element_kind;
         out
     }
 
@@ -507,6 +561,7 @@ where
                     SpecialKind::Underline => (&special_tags.underline, "u"),
                     SpecialKind::Strike => (&special_tags.strike, "s"),
                     SpecialKind::Quote => (&special_tags.quote, "q"),
+                    SpecialKind::Code => (&special_tags.code, "code"),
                 };
                 Some(custom.as_ref().cloned().unwrap_or(default.into()))
             }
@@ -516,10 +571,13 @@ where
                 Some(self.ci.line.into())
             }
             (SelectorElement::Infer, ElementKind::Paragraph) => match self.element_kind {
-                ElementKind::Line | ElementKind::LineBlock => None,
+                ElementKind::Line | ElementKind::LineBlock | ElementKind::Inline => None,
                 _ => self.ci.paragraph.map(Cow::Borrowed),
             },
         }) else {
+            if !self.first_child && !element.nodes.is_empty() {
+                self.out.write_char(' ')?;
+            }
             return self.in_content(
                 ContentInference {
                     mode: ContentMode::Inline,
@@ -561,9 +619,13 @@ where
     }
 
     fn process_node(&mut self, node: &Node) -> OutputResult {
-        Ok(match node {
+        let out = match node {
             Node::Element(e) => self.process_element(e)?,
             Node::Text { value, .. } if value.is_empty() => {}
+            Node::Text {
+                value,
+                escape: true,
+            } if self.ci.is_raw => self.write_unescape(value)?,
             Node::Text {
                 value,
                 escape: true,
@@ -571,13 +633,21 @@ where
             Node::Text {
                 value,
                 escape: false,
-            } => self.out.write_str(value)?,
+            } if self.ci.is_raw => self.out.write_str(value)?,
+            Node::Text {
+                value,
+                escape: false,
+            } => self.write_escape(value, false)?,
             Node::Comment(s) => {
                 self.out.write_str("<!--")?;
                 self.write_escape(s, false)?;
                 self.out.write_str("-->")?;
             }
-        })
+        };
+
+        self.first_child = false;
+
+        Ok(out)
     }
 }
 
@@ -611,9 +681,11 @@ pub fn output_html_to(
             line: "p",
             inline: "span",
             paragraph: Some("p"),
+            is_raw: false,
         },
         element_kind: ElementKind::Block,
         first_line: true,
+        first_child: true,
     };
     document
         .nodes

@@ -129,6 +129,9 @@ gramma::define_token!(
     #[pattern(exact = "\">")]
     pub struct CloseQuote;
 
+    #[pattern(regex = r"(?s)<`.*?`>")]
+    pub struct InlineCode;
+
     #[pattern(regex = r"(?s)<\[\[.*?\]\]>")]
     pub struct Verbatim0;
 
@@ -211,6 +214,9 @@ gramma::define_rule!(
             open: OpenQuote,
             inner: Nodes,
             close: CloseQuote,
+        },
+        Code {
+            code: InlineCode,
         },
     }
 

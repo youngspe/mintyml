@@ -475,6 +475,7 @@ pub enum SpecialKind {
     Underline,
     Strike,
     Quote,
+    Code,
 }
 
 fn build_inline_special<'src>(
@@ -482,11 +483,6 @@ fn build_inline_special<'src>(
     cx: &mut BuildContext<'src>,
 ) -> BuildResult<Node<'src>> {
     use ast::InlineSpecial::*;
-    let (Emphasis { inner, .. }
-    | Strong { inner, .. }
-    | Underline { inner, .. }
-    | Strike { inner, .. }
-    | Quote { inner, .. }) = special;
 
     let kind = match special {
         Emphasis { .. } => SpecialKind::Emphasis,
@@ -494,14 +490,30 @@ fn build_inline_special<'src>(
         Underline { .. } => SpecialKind::Underline,
         Strike { .. } => SpecialKind::Strike,
         Quote { .. } => SpecialKind::Quote,
+        Code { .. } => SpecialKind::Code,
     };
-
+    let nodes = match special {
+        Emphasis { inner, .. }
+        | Strong { inner, .. }
+        | Underline { inner, .. }
+        | Strike { inner, .. }
+        | Quote { inner, .. } => nodes_from_ast(cx, &inner.nodes)?,
+        Code { code, .. } => {
+            let mut range = code.range;
+            range.start += 2;
+            range.end -= 2;
+            vec![Node::Text {
+                value: cx.slice(range),
+                escape: false,
+            }]
+        }
+    };
     Ok(Element {
         selector: Selector {
             element: SelectorElement::Special(kind),
             ..default()
         },
-        nodes: nodes_from_ast(cx, &inner.nodes)?,
+        nodes,
         kind: ElementKind::Inline,
     })
     .map(Node::Element)
@@ -539,7 +551,11 @@ fn build_text_line_part<'src>(
                 kind: ElementKind::Inline,
             }
             .into()),
-            ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
+            ast::Node::Paragraph { paragraph } => Ok(Element {
+                kind: ElementKind::Inline,
+                ..build_paragraph(cx, paragraph)?
+            }
+            .into()),
         },
         Inline {
             inline: ast::Inline { inner: None, .. },
