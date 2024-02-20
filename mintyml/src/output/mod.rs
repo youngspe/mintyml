@@ -14,7 +14,10 @@ use alloc::{
 
 use crate::{
     escape::{unescape_parts, UnescapePart},
-    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement, SpecialKind},
+    ir::{
+        Document, Element, ElementDelimiter, ElementKind, Node, Selector, SelectorElement,
+        SpecialKind,
+    },
     utils::default,
 };
 
@@ -566,12 +569,16 @@ where
                 Some(custom.as_ref().cloned().unwrap_or(default.into()))
             }
             (SelectorElement::Infer, ElementKind::Block) => Some(self.ci.block.into()),
-            (SelectorElement::Infer, ElementKind::Inline) => Some(self.ci.inline.into()),
+            (SelectorElement::Infer, ElementKind::Inline(_)) => Some(self.ci.inline.into()),
             (SelectorElement::Infer, ElementKind::Line | ElementKind::LineBlock) => {
                 Some(self.ci.line.into())
             }
             (SelectorElement::Infer, ElementKind::Paragraph) => match self.element_kind {
-                ElementKind::Line | ElementKind::LineBlock | ElementKind::Inline => None,
+                ElementKind::Line
+                | ElementKind::LineBlock
+                | ElementKind::Inline(
+                    None | Some(ElementDelimiter::Line | ElementDelimiter::LineBlock),
+                ) => None,
                 _ => self.ci.paragraph.map(Cow::Borrowed),
             },
         }) else {
@@ -592,6 +599,10 @@ where
                 },
             );
         };
+
+        if !self.first_child {
+            self.out.write_char(' ')?;
+        }
 
         let mode = match element.kind {
             ElementKind::Block => self.ci.mode,

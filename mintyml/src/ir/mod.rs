@@ -183,11 +183,18 @@ impl<'src> ToStatic for SelectorElement<'src> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ElementDelimiter {
+    Line,
+    LineBlock,
+    Block,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ElementKind {
     Line,
     LineBlock,
     Block,
-    Inline,
+    Inline(Option<ElementDelimiter>),
     Paragraph,
 }
 
@@ -514,9 +521,17 @@ fn build_inline_special<'src>(
             ..default()
         },
         nodes,
-        kind: ElementKind::Inline,
+        kind: ElementKind::Inline(None),
     })
     .map(Node::Element)
+}
+
+fn get_delimiter(body: &ast::ElementBody) -> ElementDelimiter {
+    match body {
+        ast::ElementBody::Block { .. } => ElementDelimiter::Block,
+        ast::ElementBody::LineBlock { .. } => ElementDelimiter::LineBlock,
+        ast::ElementBody::Line { .. } => ElementDelimiter::Line,
+    }
 }
 
 fn build_text_line_part<'src>(
@@ -540,7 +555,7 @@ fn build_text_line_part<'src>(
             } => Ok(Element {
                 selector: Selector::build_from_ast(cx, selector)?,
                 nodes: build_element_body(cx, body)?,
-                kind: ElementKind::Inline,
+                kind: ElementKind::Inline(Some(get_delimiter(body))),
             }
             .into()),
             ast::Node::Element {
@@ -548,11 +563,11 @@ fn build_text_line_part<'src>(
             } => Ok(Element {
                 selector: default(),
                 nodes: build_element_body(cx, body)?,
-                kind: ElementKind::Inline,
+                kind: ElementKind::Inline(Some(get_delimiter(body))),
             }
             .into()),
             ast::Node::Paragraph { paragraph } => Ok(Element {
-                kind: ElementKind::Inline,
+                kind: ElementKind::Inline(None),
                 ..build_paragraph(cx, paragraph)?
             }
             .into()),
@@ -562,7 +577,7 @@ fn build_text_line_part<'src>(
         } => Ok(Element {
             selector: default(),
             nodes: default(),
-            kind: ElementKind::Inline,
+            kind: ElementKind::Inline(None),
         }
         .into()),
         InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
