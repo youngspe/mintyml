@@ -4,17 +4,15 @@ extern crate mintyml;
 extern crate rayon;
 
 use std::{
-    convert,
     ffi::OsStr,
     fs::{self, read_dir, OpenOptions},
     io::{self, Read, Seek, Write},
-    iter, mem,
+    iter,
     path::{self, Path, PathBuf},
 };
 
 use anyhow::{anyhow, bail, Result as AnyResult};
 use clap::{value_parser, Args, Parser, Subcommand};
-use mintyml::OutputConfig;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use utils::UtilExt as _;
 

@@ -14,7 +14,7 @@ use crate::{
     escape::{unescape_parts, UnescapePart},
     ir::{
         Document, Element, ElementDelimiter, ElementKind, Node, Selector, SelectorElement, Space,
-        SpecialKind, Text,
+        SpecialKind,
     },
     utils::default,
 };
