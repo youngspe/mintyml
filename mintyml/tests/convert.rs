@@ -1,4 +1,7 @@
+mod utils;
 use mintyml::OutputConfig;
+
+use crate::utils::convert_unwrap;
 
 const SIMPLE_SRC: &'static str = r#"
     {
@@ -15,7 +18,7 @@ const SIMPLE_SRC: &'static str = r#"
 
 #[test]
 fn simple_doc() {
-    let out = mintyml::convert(SIMPLE_SRC, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(SIMPLE_SRC, None);
 
     assert_eq!(
         out,
@@ -33,7 +36,7 @@ fn simple_doc() {
 
 #[test]
 fn simple_doc_xml() {
-    let out = mintyml::convert(SIMPLE_SRC, OutputConfig::new().xml(true)).unwrap();
+    let out = convert_unwrap(SIMPLE_SRC, OutputConfig::new().xml(true));
 
     assert_eq!(
         out,
@@ -62,7 +65,7 @@ fn special_tags() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -84,7 +87,7 @@ fn paragraph_infer_inline() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -104,7 +107,7 @@ fn paragraph_infer_inline_with_attr() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -124,7 +127,7 @@ fn table_infer_inline() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -140,7 +143,7 @@ fn table_infer_inline() {
 fn table_infer_inline_row() {
     let src = r#"table> <(<(foo)> <(bar)>)>"#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -158,7 +161,7 @@ fn table_infer_inline_all() {
         <(table> <(<(foo)> <(bar)>)> )>
     }"#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -178,7 +181,7 @@ fn table_infer_inline_with_id() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -198,7 +201,7 @@ fn table_infer_inline_with_star() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -222,7 +225,7 @@ fn details_infer_summary() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -246,7 +249,7 @@ fn details_infer_summary_with_paragraphs() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -272,7 +275,7 @@ fn dl_infer() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -302,7 +305,7 @@ fn dl_infer_with_blocks() {
         }
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -328,7 +331,7 @@ fn multiline_escaped() {
         """
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -351,7 +354,7 @@ fn multiline_unescaped() {
         '''
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -374,7 +377,7 @@ fn multiline_code() {
         ```
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
@@ -390,7 +393,6 @@ fn multiline_code() {
 fn multiline_code_after_text() {
     let src = r#"
         abc
-
         ```
         foo
         bar\nbaz
@@ -399,7 +401,7 @@ fn multiline_code_after_text() {
         ```
     "#;
 
-    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+    let out = convert_unwrap(src, None);
 
     assert_eq!(
         out,
