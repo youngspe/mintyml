@@ -22,10 +22,10 @@ fn simple_doc() {
         concat!(
             r#"<div>"#,
             r#"<p>foo bar baz</p>"#,
-            r#"<img src="./pic.png">"#,
-            r#"<p><a class="foo" href="www.example.com">a</a> b</p>"#,
-            r#"<p class="foo"></p>"#,
-            r#"<p id="bar" class="foo baz">c</p>"#,
+            r#" <img src="./pic.png">"#,
+            r#" <p><a class="foo" href="www.example.com">a</a> b</p>"#,
+            r#" <p class="foo"></p>"#,
+            r#" <p id="bar" class="foo baz">c</p>"#,
             r#"</div>"#,
         )
     );
@@ -40,10 +40,10 @@ fn simple_doc_xml() {
         concat!(
             r#"<div>"#,
             r#"<p>foo bar baz</p>"#,
-            r#"<img src="./pic.png"/>"#,
-            r#"<p><a class="foo" href="www.example.com">a</a> b</p>"#,
-            r#"<p class="foo"/>"#,
-            r#"<p id="bar" class="foo baz">c</p>"#,
+            r#" <img src="./pic.png"/>"#,
+            r#" <p><a class="foo" href="www.example.com">a</a> b</p>"#,
+            r#" <p class="foo"/>"#,
+            r#" <p id="bar" class="foo baz">c</p>"#,
             r#"</div>"#,
         )
     );
@@ -69,8 +69,8 @@ fn special_tags() {
         concat!(
             r#"<section>"#,
             r#"<p>Abc <em>def</em><strong>ghi</strong>? <u>jkl</u></p>"#,
-            r#"<p>mno <s>pqr <q>stu</q> vwx</s> yz</p>"#,
-            r#"<p>An <code>inline {code &lt;block&gt;}</code></p>"#,
+            r#" <p>mno <s>pqr <q>stu</q> vwx</s> yz</p>"#,
+            r#" <p>An <code>inline {code &lt;block&gt;}</code></p>"#,
             r#"</section>"#,
         )
     )
@@ -252,7 +252,7 @@ fn details_infer_summary_with_paragraphs() {
         out,
         concat!(
             r#"<details>"#,
-            r#"<summary>foo</summary><p>bar</p><p>baz</p>"#,
+            r#"<summary>foo</summary> <p>bar</p> <p>baz</p>"#,
             r#"</details>"#,
         )
     )
@@ -279,9 +279,9 @@ fn dl_infer() {
         concat!(
             r#"<dl>"#,
             r#"<dt>term1</dt>"#,
-            r#"<dd>details1</dd>"#,
-            r#"<dt>term2</dt>"#,
-            r#"<dd>details2</dd>"#,
+            r#" <dd>details1</dd>"#,
+            r#" <dt>term2</dt>"#,
+            r#" <dd>details2</dd>"#,
             r#"</dl>"#,
         )
     )
@@ -309,10 +309,79 @@ fn dl_infer_with_blocks() {
         concat!(
             r#"<dl>"#,
             r#"<dt>term1</dt>"#,
-            r#"<dd>details1</dd>"#,
-            r#"<dt>term2</dt>"#,
-            r#"<dd>details2</dd>"#,
+            r#" <dd>details1</dd>"#,
+            r#" <dt>term2</dt>"#,
+            r#" <dd>details2</dd>"#,
             r#"</dl>"#,
+        )
+    )
+}
+
+#[test]
+fn multiline_escaped() {
+    let src = r#"
+        """
+        foo
+        bar\nbaz
+
+        qux
+        """
+    "#;
+
+    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<p>"#,
+            r#"foo&NewLine;bar&NewLine;baz&NewLine;&NewLine;qux"#,
+            r#"</p>"#,
+        )
+    )
+}
+
+#[test]
+fn multiline_unescaped() {
+    let src = r#"
+        '''
+        foo
+        bar\nbaz
+
+        qux
+        '''
+    "#;
+
+    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<p>"#,
+            r#"foo&NewLine;bar\nbaz&NewLine;&NewLine;qux"#,
+            r#"</p>"#,
+        )
+    )
+}
+
+#[test]
+fn multiline_code() {
+    let src = r#"
+        ```
+        foo
+        bar\nbaz
+
+        qux
+        ```
+    "#;
+
+    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<pre><code>"#,
+            r#"foo&NewLine;bar\nbaz&NewLine;&NewLine;qux"#,
+            r#"</code></pre>"#,
         )
     )
 }

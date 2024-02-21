@@ -50,6 +50,7 @@ gramma::define_token!(
 
     #[pattern(regex = r"[ \t]*\r?\n[ \t]*")]
     pub struct NewLine;
+
     #[pattern(regex = r"[ \t]+")]
     pub struct Space;
     #[pattern(regex = r"\s+")]
@@ -140,6 +141,17 @@ gramma::define_token!(
 
     #[pattern(regex = r"(?s)<\[##\[.*?\]##\]>")]
     pub struct Verbatim2;
+
+    #[pattern(regex = r#"(?ms)"""[ \t\r]*\n.*?^[ \t]*""""#)]
+    pub struct MultilineEscaped;
+
+    #[pattern(regex = r#"(?ms)'''[ \t\r]*\n.*?^[ \t]*'''"#)]
+    pub struct MultilineUnescaped;
+
+    #[pattern(regex = r"(?ms)```[ \t\r]*$")]
+    pub struct MultilineCodeStarter;
+    #[pattern(regex = r"(?ms)```[ \t\r]*\n.*?^[ \t]*```")]
+    pub struct MultilineCode;
 );
 
 gramma::define_rule!(
@@ -150,6 +162,7 @@ gramma::define_rule!(
         pub r_brace: RightBrace,
     }
 
+    #[transform(not<MultilineCodeStarter>)]
     pub struct TextLine {
         pub part1: TextLinePart,
         pub parts: Vec<(Option<Space>, TextLinePart)>,
@@ -167,6 +180,11 @@ gramma::define_rule!(
         Verbatim0 { value: Verbatim0 },
         Verbatim1 { value: Verbatim1 },
         Verbatim2 { value: Verbatim2 },
+    }
+
+    pub enum Multiline {
+        Escaped { value: MultilineEscaped },
+        Unescaped { value: MultilineUnescaped },
     }
 
     pub struct Comment {
@@ -220,10 +238,15 @@ gramma::define_rule!(
         },
     }
 
+    pub enum ParagraphItem {
+        Multiline { multiline: Multiline },
+        Line { line: TextLine },
+    }
+
     pub struct Paragraph {
-        pub line1: TextLine,
+        pub line1: ParagraphItem,
         #[transform(for_each<discard_before<NewLine>>)]
-        pub lines: Vec<TextLine>,
+        pub lines: Vec<ParagraphItem>,
     }
 
     pub enum ElementBody {
@@ -254,6 +277,7 @@ gramma::define_rule!(
     }
 
     pub enum Node {
+        MultilineCode { multiline: MultilineCode },
         Element { element: Element },
         Paragraph { paragraph: Paragraph },
     }

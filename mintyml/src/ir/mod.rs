@@ -10,7 +10,7 @@ use gramma::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
 use crate::{
     ast,
     escape::{escape_errors, EscapeError},
-    utils::{default, join_display, DisplayFn},
+    utils::{default, intersperse_with, join_display, try_extend, DisplayFn},
 };
 
 pub trait ToStatic {
@@ -68,11 +68,39 @@ impl<'src> ToStatic for Document<'src> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Space {
+    Inline,
+    LineEnd,
+    ParagraphEnd,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub struct Text<'src> {
+    pub value: Cow<'src, str>,
+    pub escape: bool,
+    pub multiline: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Node<'src> {
     Element(Element<'src>),
-    Text { value: Cow<'src, str>, escape: bool },
+    Text(Text<'src>),
     Comment(Cow<'src, str>),
+    Space(Space),
+}
+
+impl<'src> From<Text<'src>> for Node<'src> {
+    fn from(v: Text<'src>) -> Self {
+        Self::Text(v)
+    }
+}
+
+impl<'src> From<Space> for Node<'src> {
+    fn from(v: Space) -> Self {
+        Self::Space(v)
+    }
 }
 
 impl<'src> From<Element<'src>> for Node<'src> {
@@ -87,11 +115,17 @@ impl<'src> ToStatic for Node<'src> {
     fn to_static(self) -> Self::Static {
         match self {
             Node::Element(x) => Node::Element(x.to_static()),
-            Node::Text { value, escape } => Node::Text {
+            Node::Text(Text {
+                value,
+                escape,
+                multiline,
+            }) => Node::Text(Text {
                 value: value.to_static(),
                 escape,
-            },
+                multiline,
+            }),
             Node::Comment(x) => Node::Comment(x.to_static()),
+            Node::Space(x) => Node::Space(x),
         }
     }
 }
@@ -434,25 +468,82 @@ fn build_text_line<'src>(
     line: &ast::TextLine,
     out: &mut Vec<Node<'src>>,
 ) -> BuildResult<()> {
-    [(&None, &line.part1)]
+    let first = [(&None, &line.part1)].into_iter();
+
+    let rest = line.parts.iter().map(|(space, parts)| (space, parts));
+
+    let nodes = first.chain(rest).flat_map(|(space, part)| {
+        [
+            space.as_ref().map(|_| Ok(Space::Inline.into())),
+            Some(build_text_line_part(part, cx)),
+        ]
         .into_iter()
-        .chain(line.parts.iter().map(|(space, parts)| (space, parts)))
-        .flat_map(|(space, part)| {
-            space
-                .as_ref()
-                .map(|_| {
-                    Ok(Node::Text {
-                        value: " ".into(),
-                        escape: false,
-                    })
-                })
-                .into_iter()
-                .chain([build_text_line_part(part, cx)])
-        })
-        .try_for_each(|node| {
-            out.push(node?);
-            Ok(())
-        })
+        .flatten()
+    });
+
+    try_extend(out, nodes)
+}
+
+fn get_multiline_text<'src, const ESCAPE: bool>(
+    cx: &mut BuildContext<'src>,
+    range: LocationRange,
+    escape: bool,
+) -> BuildResult<Node<'src>> {
+    let value = if escape {
+        cx.slice(range)
+    } else {
+        cx.escapable_slice(range)?
+    };
+    Ok(Text {
+        value,
+        escape,
+        multiline: true,
+    }
+    .into())
+}
+
+fn build_multiline<'src>(
+    cx: &mut BuildContext<'src>,
+    multiline: &ast::Multiline,
+) -> BuildResult<Node<'src>> {
+    match multiline {
+        ast::Multiline::Escaped { value } => get_multiline_text::<true>(cx, value.range, true),
+        ast::Multiline::Unescaped { value } => get_multiline_text::<false>(cx, value.range, false),
+    }
+}
+
+fn build_multiline_code<'src>(
+    cx: &mut BuildContext<'src>,
+    multiline: &ast::MultilineCode,
+) -> BuildResult<Node<'src>> {
+    let inner = get_multiline_text::<false>(cx, multiline.range, false)?;
+
+    let code = Element {
+        kind: ElementKind::Paragraph,
+        selector: SelectorElement::Special(SpecialKind::Code).into(),
+        nodes: vec![inner],
+    };
+
+    let pre = Element {
+        kind: ElementKind::Block,
+        selector: SelectorElement::Special(SpecialKind::CodeBlockContainer).into(),
+        nodes: vec![code.into()],
+    };
+
+    Ok(pre.into())
+}
+
+fn build_paragraph_item<'src>(
+    cx: &mut BuildContext<'src>,
+    item: &ast::ParagraphItem,
+    out: &mut Vec<Node<'src>>,
+) -> BuildResult<()> {
+    match item {
+        ast::ParagraphItem::Line { line } => build_text_line(cx, line, out)?,
+        ast::ParagraphItem::Multiline { multiline } => out.push(build_multiline(cx, multiline)?),
+    }
+
+    Ok(())
 }
 
 fn build_verbatim_text<'src>(
@@ -468,10 +559,11 @@ fn build_verbatim_text<'src>(
     range.start += trim;
     range.end -= trim;
 
-    Ok(Node::Text {
+    Ok(Text {
         value: cx.slice(range),
-        escape: false,
-    })
+        ..default()
+    }
+    .into())
 }
 
 #[non_exhaustive]
@@ -483,6 +575,7 @@ pub enum SpecialKind {
     Strike,
     Quote,
     Code,
+    CodeBlockContainer,
 }
 
 fn build_inline_special<'src>(
@@ -509,10 +602,11 @@ fn build_inline_special<'src>(
             let mut range = code.range;
             range.start += 2;
             range.end -= 2;
-            vec![Node::Text {
+            vec![Text {
                 value: cx.slice(range),
-                escape: false,
-            }]
+                ..default()
+            }
+            .into()]
         }
     };
     Ok(Element {
@@ -541,15 +635,18 @@ fn build_text_line_part<'src>(
     use ast::TextLinePart::*;
     match part {
         Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
-        TextSegment { text } => Ok(Node::Text {
+        TextSegment { text } => Ok(Text {
             value: cx.escapable_slice(text.range)?,
             escape: true,
-        }),
+            ..default()
+        }
+        .into()),
         Inline {
             inline: ast::Inline {
                 inner: Some(node), ..
             },
         } => match &**node {
+            ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
             ast::Node::Element {
                 element: ast::Element::WithSelector { selector, body },
             } => Ok(Element {
@@ -590,14 +687,11 @@ fn build_paragraph<'src>(
     paragraph: &ast::Paragraph,
 ) -> BuildResult<Element<'src>> {
     let mut nodes = Vec::new();
-    build_text_line(cx, &paragraph.line1, &mut nodes)?;
+    build_paragraph_item(cx, &paragraph.line1, &mut nodes)?;
 
     for line in &paragraph.lines {
-        nodes.push(Node::Text {
-            value: " ".into(),
-            escape: false,
-        });
-        build_text_line(cx, line, &mut nodes)?;
+        nodes.push(Node::Space(Space::LineEnd));
+        build_paragraph_item(cx, line, &mut nodes)?;
     }
 
     Ok(Element {
@@ -621,6 +715,9 @@ fn build_element_body<'src>(
         ast::ElementBody::Line {
             body: Some(body), ..
         } => match &**body {
+            ast::Node::MultilineCode { multiline } => {
+                Ok(vec![build_multiline_code(cx, multiline)?])
+            }
             ast::Node::Element { element } => Ok(vec![build_element(cx, element)?.into()]),
             ast::Node::Paragraph { paragraph } => Ok(vec![build_paragraph(cx, paragraph)?.into()]),
         },
@@ -657,12 +754,12 @@ fn nodes_from_ast<'src, 'ast>(
     cx: &mut BuildContext<'src>,
     ast: impl IntoIterator<Item = &'ast ast::Node>,
 ) -> BuildResult<Vec<Node<'src>>> {
-    ast.into_iter()
-        .map(|node| match node {
-            ast::Node::Element { element } => build_element(cx, element).map(Node::from),
-            ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
-        })
-        .collect()
+    let nodes = ast.into_iter().map(|node| match node {
+        ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
+        ast::Node::Element { element } => build_element(cx, element).map(Node::from),
+        ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
+    });
+    intersperse_with(nodes, || Ok(Space::ParagraphEnd.into())).collect()
 }
 
 #[test]

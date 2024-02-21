@@ -1,6 +1,4 @@
-// pub trait ContentInference {
-
-// }
+mod utils;
 
 use core::{
     fmt::{self, Write},
@@ -15,11 +13,13 @@ use alloc::{
 use crate::{
     escape::{unescape_parts, UnescapePart},
     ir::{
-        Document, Element, ElementDelimiter, ElementKind, Node, Selector, SelectorElement,
-        SpecialKind,
+        Document, Element, ElementDelimiter, ElementKind, Node, Selector, SelectorElement, Space,
+        SpecialKind, Text,
     },
     utils::default,
 };
+
+use self::utils::trim_multiline;
 
 #[non_exhaustive]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -198,6 +198,7 @@ pub struct SpecialTagConfig {
     pub strike: Option<Cow<'static, str>>,
     pub quote: Option<Cow<'static, str>>,
     pub code: Option<Cow<'static, str>>,
+    pub code_block_container: Option<Cow<'static, str>>,
 }
 
 impl OutputConfig {
@@ -241,6 +242,10 @@ impl OutputConfig {
     pub fn code_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
         self.update(|c| c.special_tags.code = Some(tag.into()))
     }
+
+    pub fn code_block_container_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
+        self.update(|c| c.special_tags.code_block_container = Some(tag.into()))
+    }
 }
 
 struct OutputContext<'cx, Out> {
@@ -251,7 +256,7 @@ struct OutputContext<'cx, Out> {
     ci: ContentInference<'cx>,
     element_kind: ElementKind,
     first_line: bool,
-    first_child: bool,
+    follows_space: bool,
 }
 
 trait Escape {
@@ -440,27 +445,41 @@ where
         )
     }
 
-    fn _line<T>(&mut self, f: impl FnOnce(&mut Self) -> OutputResult<T>) -> OutputResult<T> {
-        match self.config.indent.as_deref() {
-            Some(indent) => {
-                if !self.first_line {
-                    self.out.write_char('\n')?;
-                }
-                self.first_line = false;
-                for _ in 0..self.indent_level {
-                    self.out.write_str(indent)?;
-                }
-                f(self)
+    fn _line(&mut self) -> OutputResult {
+        if let Some(indent) = self.config.indent.as_deref() {
+            if !self.first_line {
+                self.out.write_char('\n')?;
             }
-            _ => f(self),
+            self.first_line = false;
+            for _ in 0..self.indent_level {
+                self.out.write_str(indent)?;
+            }
+            self.follows_space = true;
+        }
+
+        Ok(())
+    }
+    fn line(&mut self) -> OutputResult {
+        if !self.follows_space && self.ci.mode == ContentMode::Block {
+            self._line()
+        } else {
+            Ok(())
         }
     }
-    fn line<T>(&mut self, f: impl FnOnce(&mut Self) -> OutputResult<T>) -> OutputResult<T> {
-        if self.ci.mode == ContentMode::Block {
-            self._line(f)
-        } else {
-            f(self)
+
+    fn space(&mut self, space: Space) -> OutputResult {
+        if !self.follows_space {
+            match space {
+                Space::LineEnd | Space::ParagraphEnd
+                    if self.ci.mode == ContentMode::Block && self.config.indent.is_some() =>
+                {
+                    self._line()?
+                }
+                _ => self.out.write_str(" ")?,
+            }
+            self.follows_space = true;
         }
+        Ok(())
     }
 
     fn indent<T>(&mut self, f: impl FnOnce(&mut Self) -> OutputResult<T>) -> OutputResult<T> {
@@ -474,7 +493,6 @@ where
                 f(self)
             }
         } else {
-            // self._line(f)
             f(self)
         }
     }
@@ -487,9 +505,7 @@ where
     ) -> OutputResult<T> {
         mem::swap(&mut ci, &mut self.ci);
         mem::swap(&mut element_kind, &mut self.element_kind);
-        let was_first = mem::replace(&mut self.first_child, true);
         let out = f(self);
-        self.first_child = was_first;
         self.ci = ci;
         self.element_kind = element_kind;
         out
@@ -542,11 +558,13 @@ where
             self.out.write_char('/')?;
         }
         self.out.write_char('>')?;
+        self.follows_space = false;
         Ok(())
     }
 
     fn write_close_tag(&mut self, tag: &str) -> OutputResult {
         write!(self.out, "</{tag}>")?;
+        self.follows_space = false;
         Ok(())
     }
 
@@ -565,6 +583,7 @@ where
                     SpecialKind::Strike => (&special_tags.strike, "s"),
                     SpecialKind::Quote => (&special_tags.quote, "q"),
                     SpecialKind::Code => (&special_tags.code, "code"),
+                    SpecialKind::CodeBlockContainer => (&special_tags.code_block_container, "pre"),
                 };
                 Some(custom.as_ref().cloned().unwrap_or(default.into()))
             }
@@ -582,9 +601,6 @@ where
                 _ => self.ci.paragraph.map(Cow::Borrowed),
             },
         }) else {
-            if !self.first_child && !element.nodes.is_empty() {
-                self.out.write_char(' ')?;
-            }
             return self.in_content(
                 ContentInference {
                     mode: ContentMode::Inline,
@@ -600,10 +616,6 @@ where
             );
         };
 
-        if !self.first_child {
-            self.out.write_char(' ')?;
-        }
-
         let mode = match element.kind {
             ElementKind::Block => self.ci.mode,
             _ => ContentMode::Inline,
@@ -611,18 +623,22 @@ where
         let (_, tag_info) = self.get_info(&tag, ContentInference { mode, ..self.ci });
 
         if element.nodes.len() == 0 && self.is_xml() {
-            self.line(|this| this.write_open_tag(&tag, &element.selector, true))
+            self.write_open_tag(&tag, &element.selector, true)
         } else {
-            self.line(|this| this.write_open_tag(&tag, &element.selector, false))?;
+            self.write_open_tag(&tag, &element.selector, false)?;
             self.in_content(tag_info.ci, element.kind, |this| {
-                this.indent(|this| {
-                    element
-                        .nodes
-                        .iter()
-                        .try_for_each(|node| this.process_node(node))
-                })?;
+                if !element.nodes.is_empty() {
+                    this.indent(|this| {
+                        this.line()?;
+                        element
+                            .nodes
+                            .iter()
+                            .try_for_each(|node| this.process_node(node))
+                    })?;
+                    this.line()?;
+                }
                 if !tag_info.is_void {
-                    this.line(|this| this.write_close_tag(&tag))?;
+                    this.write_close_tag(&tag)?;
                 }
                 Ok(())
             })
@@ -632,31 +648,40 @@ where
     fn process_node(&mut self, node: &Node) -> OutputResult {
         let out = match node {
             Node::Element(e) => self.process_element(e)?,
-            Node::Text { value, .. } if value.is_empty() => {}
-            Node::Text {
-                value,
-                escape: true,
-            } if self.ci.is_raw => self.write_unescape(value)?,
-            Node::Text {
-                value,
-                escape: true,
-            } => self.write_escape_unescape(value, false)?,
-            Node::Text {
-                value,
-                escape: false,
-            } if self.ci.is_raw => self.out.write_str(value)?,
-            Node::Text {
-                value,
-                escape: false,
-            } => self.write_escape(value, false)?,
+            Node::Text(text) if text.value.is_empty() => {}
+            Node::Text(text) => {
+                let escape = text.escape;
+                let is_raw = self.ci.is_raw;
+                let mut write = |value| match (escape, is_raw) {
+                    (true, true) => self.write_unescape(value),
+                    (true, false) => self.write_escape_unescape(value, false),
+                    (false, true) => self.out.write_str(value).map_err(Into::into),
+                    (false, false) => self.write_escape(value, false),
+                };
+
+                let mut last_line = &*text.value;
+
+                if text.multiline {
+                    for line in trim_multiline(&text.value) {
+                        write(line)?;
+                        last_line = &line
+                    }
+                } else {
+                    write(&text.value)?;
+                }
+
+                self.follows_space = last_line.ends_with([' ', '\t']);
+            }
             Node::Comment(s) => {
                 self.out.write_str("<!--")?;
                 self.write_escape(s, false)?;
                 self.out.write_str("-->")?;
             }
+            Node::Space(space) => {
+                self.space(*space)?;
+                self.follows_space = true
+            }
         };
-
-        self.first_child = false;
 
         Ok(out)
     }
@@ -696,7 +721,7 @@ pub fn output_html_to(
         },
         element_kind: ElementKind::Block,
         first_line: true,
-        first_child: true,
+        follows_space: true,
     };
     document
         .nodes

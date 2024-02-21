@@ -1,0 +1,147 @@
+main {
+    display: contents;
+}
+
+:root {
+    height: 100vh;
+    min-height: 50rem;
+    max-height: 200rem;
+    min-width: 20rch;
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+}
+
+body {
+    margin: 0;
+    padding: 1rem;
+    display: flex;
+    height: 100%;
+    flex-flow: column;
+    justify-content: stretch;
+}
+
+demo-container {
+    flex: 1;
+    align-self: stretch;
+}
+
+.page-content {
+    width: 95%;
+    margin-inline: auto;
+}
+
+.main-flow-item>section>details {
+    summary {
+        text-align: center;
+    }
+}
+
+.main-flow-item>section>details>summary h2 {
+    display: inline;
+}
+
+demo-container {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: stretch;
+    align-content: stretch;
+    justify-content: center;
+}
+
+demo-container>output {
+    display: contents;
+}
+
+#editor,
+#viewer {
+    height: 100%;
+    width: 100%;
+    position: relative;
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-fg-2);
+}
+
+#text-in,
+#text-out {
+    text-wrap: nowrap;
+    margin: 0;
+}
+
+#view-out {
+    overflow: overlay;
+    padding-block-end: 1rem;
+    padding-inline: 0.5rem;
+}
+
+.main-flow-item {
+    overflow: visible;
+    width: 0;
+    margin: 0.5rem;
+    position: relative;
+    flex: 0 0 fit-content;
+    transition: all 50ms ease-out;
+
+    >section {
+        margin: 0;
+
+        overflow: hidden;
+        border-radius: 1rem;
+        box-shadow: 0 0.35rem 1rem -0.25rem var(--color-shadow);
+        border: 1px solid var(--color-fg-3);
+        width: min-content;
+        display: flex;
+        flex-flow: column;
+
+        >details:not([open])>summary {
+            text-orientation: mixed;
+            writing-mode: vertical-lr;
+            margin-inline: 1rem;
+            transform: rotate(180deg);
+        }
+
+        >details {
+            display: contents;
+
+            >h2 {
+                text-align: center;
+                margin-block: 0.25rem;
+            }
+        }
+
+        >details[open] {
+            width: 100%;
+            height: 100%;
+
+            >summary+* {
+                width: 100%;
+                height: 100%;
+            }
+        }
+    }
+
+    &:has(>section>details[open]) {
+        >section {
+            position: absolute;
+            inset: 0;
+            width: auto;
+            height: auto;
+        }
+
+        &#text-in-wrapper {
+            flex: 1 1 50rch;
+            min-width: calc(min(100%, 30rch));
+        }
+
+        &#text-out-wrapper {
+            flex: 1 1 30rch;
+            min-width: calc(min(100%, 20rch));
+        }
+
+        &#view-out-wrapper {
+            flex: 1 1 40rch;
+            min-width: calc(min(100%, 40rch));
+            max-width: 60rem;
+        }
+    }
+}

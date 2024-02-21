@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, iter};
 
 pub fn default<T: Default>() -> T {
     T::default()
@@ -135,4 +135,23 @@ pub fn join_display<T: fmt::Display>(
     sep: impl fmt::Display,
 ) -> impl fmt::Display {
     join_fmt(src, |x, f| fmt::Display::fmt(&x, f), sep)
+}
+
+pub fn intersperse_with<T>(
+    iter: impl IntoIterator<Item = T>,
+    f: impl FnMut() -> T,
+) -> impl Iterator<Item = T> {
+    let mut iter = iter.into_iter();
+    let first = iter.next();
+
+    first
+        .into_iter()
+        .chain(iter::zip(iter::repeat_with(f), iter).flat_map(|(item1, item2)| [item1, item2]))
+}
+
+pub fn try_extend<T, E>(
+    out: &mut impl Extend<T>,
+    src: impl IntoIterator<Item = Result<T, E>>,
+) -> Result<(), E> {
+    src.into_iter().try_for_each(|item| item.map(|x| out.extend([x])))
 }
