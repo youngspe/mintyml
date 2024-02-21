@@ -385,3 +385,29 @@ fn multiline_code() {
         )
     )
 }
+
+#[test]
+fn multiline_code_after_text() {
+    let src = r#"
+        abc
+
+        ```
+        foo
+        bar\nbaz
+
+        qux
+        ```
+    "#;
+
+    let out = mintyml::convert(src, OutputConfig::new()).unwrap();
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<p>abc</p>"#,
+            r#" <pre><code>"#,
+            r#"foo&NewLine;bar\nbaz&NewLine;&NewLine;qux"#,
+            r#"</code></pre>"#,
+        )
+    )
+}

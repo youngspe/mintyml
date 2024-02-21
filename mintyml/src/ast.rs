@@ -48,6 +48,11 @@ gramma::define_token!(
     )+"#)]
     pub struct TextSegment;
 
+    #[pattern(regex = r#"(?xs)
+        ```\s*
+    "#)]
+    pub struct InvalidTextSegment;
+
     #[pattern(regex = r"[ \t]*\r?\n[ \t]*")]
     pub struct NewLine;
 
@@ -148,8 +153,6 @@ gramma::define_token!(
     #[pattern(regex = r#"(?ms)'''[ \t\r]*\n.*?^[ \t]*'''"#)]
     pub struct MultilineUnescaped;
 
-    #[pattern(regex = r"(?ms)```[ \t\r]*$")]
-    pub struct MultilineCodeStarter;
     #[pattern(regex = r"(?ms)```[ \t\r]*\n.*?^[ \t]*```")]
     pub struct MultilineCode;
 );
@@ -162,18 +165,28 @@ gramma::define_rule!(
         pub r_brace: RightBrace,
     }
 
-    #[transform(not<MultilineCodeStarter>)]
     pub struct TextLine {
         pub part1: TextLinePart,
         pub parts: Vec<(Option<Space>, TextLinePart)>,
     }
 
     pub enum TextLinePart {
-        TextSegment { text: TextSegment },
-        Verbatim { verbatim: Verbatim },
-        InlineSpecial { inline_special: InlineSpecial },
-        Inline { inline: Inline },
-        Comment { comment: Comment },
+        #[transform(not<InvalidTextSegment>)]
+        TextSegment {
+            text: TextSegment,
+        },
+        Verbatim {
+            verbatim: Verbatim,
+        },
+        InlineSpecial {
+            inline_special: InlineSpecial,
+        },
+        Inline {
+            inline: Inline,
+        },
+        Comment {
+            comment: Comment,
+        },
     }
 
     pub enum Verbatim {
