@@ -38,30 +38,33 @@ class Demo {
             viewOutShadow.append(this._viewOutput)
         }
 
-        let fontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.8
+        {
+            let options = {
+                fontSize: parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75,
+                fontFamily: 'monospace',
+                tabSize: 2,
+                printMargin: false,
+            } satisfies Partial<ace.Ace.EditorOptions>
 
-        this._editor = ace.edit(host.getElementById('editor')!, {
-            displayIndentGuides: true,
-            useSoftTabs: true,
-            tabSize: 2,
-            fontFamily: 'monospace',
-            showGutter: false,
-            fontSize,
-        })
-        this._textOutput = ace.edit(host.getElementById('viewer')!, {
-            readOnly: true,
-            selectionStyle: 'display: none',
-            highlightActiveLine: false,
-            highlightGutterLine: false,
-            highlightIndentGuides: false,
-            highlightSelectedWord: false,
-            showGutter: false,
-            cursorStyle: 'smooth',
-            fontFamily: 'monospace',
-            fontSize,
-            mode: 'ace/mode/html',
-            useWorker: false,
-        })
+            this._editor = ace.edit(host.getElementById('editor')!, {
+                ...options,
+                displayIndentGuides: true,
+                useSoftTabs: true,
+                showGutter: true,
+            })
+            this._textOutput = ace.edit(host.getElementById('viewer')!, {
+                ...options,
+                readOnly: true,
+                selectionStyle: 'display: none',
+                highlightActiveLine: false,
+                highlightGutterLine: false,
+                highlightIndentGuides: false,
+                highlightSelectedWord: false,
+                showGutter: false,
+                mode: 'ace/mode/html',
+                useWorker: false,
+            })
+        }
 
         this._media = window.matchMedia("(prefers-color-scheme: dark)")
     }
@@ -69,6 +72,8 @@ class Demo {
     private _onSchemeChange = (e: MediaQueryListEvent) => {
         this._updateTheme(e.matches)
     }
+
+    private _markers: number[] = []
 
     init() {
         this._media.addEventListener('change', this._onSchemeChange)
@@ -78,11 +83,43 @@ class Demo {
         const worker = this._worker = new Worker(new URL('./worker.ts', import.meta.url))
         this._update()
         worker.onmessage = (e: MessageEvent<ConvertResponseMessage>) => {
+            let session = this._editor.getSession()
+
+            for (const marker of this._markers) {
+                session.removeMarker(marker)
+            }
+            this._markers = []
+
+
             if ('output' in e.data) {
+                session.clearAnnotations()
                 this._textOutput.setValue(e.data.output, 0)
                 this._textOutput.clearSelection()
                 this._viewOutput.innerHTML = e.data.output
             } else {
+                const annotations: ace.Ace.Annotation[] = []
+                if (e.data.error.syntax_errors) {
+                    let doc = session.getDocument()
+                    for (const error of e.data.error.syntax_errors) {
+                        let start = doc.indexToPosition(error.start, 0)
+                        let end = doc.indexToPosition(error.end, 0)
+                        let range = new ace.Range(
+                            start.row, start.column,
+                            end.row, end.column,
+                        )
+                        this._markers.push(session.addMarker(range, 'syntax-error', 'text', true))
+                        let msg = 'expected' in error ? `Expected ${error.expected.join(' | ')}`
+                            : error.message
+                        annotations.push({
+                            type: 'error',
+                            text: msg,
+                            row: start.row,
+                            column: start.column,
+                        })
+                    }
+                }
+                session.setAnnotations(annotations)
+
                 console.error(e.data.error)
             }
             this._sent = undefined

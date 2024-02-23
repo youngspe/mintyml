@@ -7,6 +7,9 @@ license = "MIT"
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+js-sys = "0.3.68"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.wasm-bindgen]

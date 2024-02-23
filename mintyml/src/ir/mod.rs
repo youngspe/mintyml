@@ -5,7 +5,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use gramma::{parse::LocationRange, parse_tree, token::TokenType, ParseError};
+use gramma::{parse::LocationRange, parse_tree, ParseError};
 
 use crate::{
     ast,
@@ -288,7 +288,9 @@ pub enum SyntaxErrorKind {
     #[non_exhaustive]
     InvalidEscape {},
     #[non_exhaustive]
-    ParseFailed { expected: Vec<TokenType> },
+    ParseFailed {
+        expected: Vec<gramma::error::ExpectedParse>,
+    },
 }
 
 impl From<EscapeError> for SyntaxError {

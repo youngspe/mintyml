@@ -145,3 +145,8 @@ demo-container>output {
         }
     }
 }
+
+.syntax-error {
+    border-bottom: double red;
+    position: absolute;
+}

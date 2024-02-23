@@ -64,7 +64,7 @@ struct ConvertSource {
 #[derive(Debug, Args)]
 struct ConvertOptions {
     #[arg(short, long)]
-    xhtml: bool,
+    xhtml: bool, 
     #[arg(short, long)]
     pretty: bool,
     #[arg(long, requires = "pretty", value_parser = value_parser!(u8).range(0..=16), default_value = "2")]
