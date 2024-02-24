@@ -91,6 +91,10 @@ pub fn convert_to<'src>(
         src: src.into(),
     })?;
 
+    if config.complete_page.unwrap_or(false) {
+        transform::complete_page::complete_page(&mut document);
+    }
+
     transform::infer_elements::infer_elements(&mut document, &config.special_tags);
 
     output::output_html_to(&document, out, config).map_err(|e| match e {

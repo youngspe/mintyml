@@ -503,6 +503,11 @@ pub fn output_html_to(
         mode: ContentMode::Block,
         follows_space: true,
     };
+
+    if cx.config.complete_page.unwrap_or(false) {
+        cx.out.write_str("<!DOCTYPE html>\n")?;
+    }
+
     document
         .nodes
         .iter()

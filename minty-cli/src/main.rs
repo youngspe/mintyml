@@ -64,11 +64,14 @@ struct ConvertSource {
 #[derive(Debug, Args)]
 struct ConvertOptions {
     #[arg(short, long)]
-    xhtml: bool, 
+    xml: bool,
     #[arg(short, long)]
     pretty: bool,
     #[arg(long, requires = "pretty", value_parser = value_parser!(u8).range(0..=16), default_value = "2")]
     indent: u8,
+    /// Convert a MinTyML fragment without wrapping it in `<html>` tags.
+    #[arg(long)]
+    fragment: bool,
 }
 
 impl Cli {
@@ -202,12 +205,14 @@ impl Convert {
     }
 
     fn get_convert_config(options: &ConvertOptions) -> mintyml::OutputConfig {
-        mintyml::OutputConfig::new().also(|cfg| {
-            cfg.xml = Some(options.xhtml);
-            if options.pretty {
-                cfg.indent = Some(iter::repeat(' ').take(options.indent as usize).collect());
-            }
-        })
+        mintyml::OutputConfig::new()
+            .xml(options.xml)
+            .complete_page(!options.fragment)
+            .update(|cfg| {
+                if options.pretty {
+                    cfg.indent = Some(iter::repeat(' ').take(options.indent as usize).collect());
+                }
+            })
     }
 
     fn convert(src: impl Read, mut dest: impl Write, options: &ConvertOptions) -> AnyResult<()> {
@@ -266,7 +271,7 @@ fn change_extension(path: &mut PathBuf, options: &ConvertOptions) {
         path.set_extension("");
     }
     path.as_mut_os_string()
-        .push(if options.xhtml { ".xhtml" } else { ".html" });
+        .push(if options.xml { ".xhtml" } else { ".html" });
 }
 
 enum PathKind {

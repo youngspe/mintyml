@@ -1,3 +1,4 @@
+use alloc::{borrow::ToOwned, string::String};
 use core::{fmt, iter};
 
 pub fn default<T: Default>() -> T {

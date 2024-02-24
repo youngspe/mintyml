@@ -58,14 +58,13 @@ fn to_js_error(e: ConvertError) -> JsValue {
             let _ = Reflect::set(&error, &"syntax_errors".into(), &errors);
             error.into()
         }
-        ConvertError::Unknown => todo!(),
         _ => js_sys::Error::new("Unknown error").into(),
     }
 }
 
 #[wasm_bindgen]
-pub fn convert(src: &str, xml: bool, indent: i32) -> Result<String, JsValue> {
-    let mut config = OutputConfig::new().xml(xml);
+pub fn convert(src: &str, xml: bool, indent: i32, complete_page: bool) -> Result<String, JsValue> {
+    let mut config = OutputConfig::new().xml(xml).complete_page(complete_page);
     if indent >= 0 {
         config.indent = Some(
             core::iter::repeat(' ')

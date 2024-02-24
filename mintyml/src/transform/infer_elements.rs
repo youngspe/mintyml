@@ -1,6 +1,6 @@
 use core::mem;
 
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow, string::String};
 
 use crate::{
     ir::{Document, Element, ElementDelimiter, ElementKind, Node, SelectorElement, SpecialKind},
@@ -280,6 +280,8 @@ impl<'src, 'data, 'buf> InferContext<'src, 'data, 'buf> {
                 ..self.ci
             };
         }
+
+        element.is_raw = ci.is_raw;
 
         match (InferContext {
             ci,

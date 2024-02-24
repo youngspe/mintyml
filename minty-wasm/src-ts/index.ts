@@ -18,15 +18,17 @@ export type MintymlSyntaxError = MintymlBaseSyntaxError | MintymlParsingError
 export class MintymlConverter {
     xml
     indent: number | null
+    completePage: boolean
 
-    constructor(options: { xml?: boolean, indent?: number | null }) {
+    constructor(options: { xml?: boolean, indent?: number | null, completePage?: boolean }) {
         this.xml = options.xml ?? false
         this.indent = options.indent ?? null
+        this.completePage = options.completePage ?? false
     }
 
     convert(src: string): string {
         try {
-            return _mintyml.convert(src, this.xml, this.indent ?? -1)
+            return _mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage)
         } catch (e) {
             const err = e as MintymlError
 

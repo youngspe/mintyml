@@ -1,3 +1,4 @@
+use alloc::{vec, vec::Vec};
 use core::mem;
 
 use crate::ir::{Document, Element, Node, Selector, SelectorElement};
@@ -70,7 +71,7 @@ pub fn complete_page<'src>(doc: &mut Document<'src>) {
             })
             .collect();
 
-        root.nodes = vec![];
+        root.nodes = vec![head.into(), body.into()];
     }
 
     doc.nodes = vec![root.into()];
