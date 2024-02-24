@@ -19,6 +19,30 @@ view-output>* {
     --color-shadow: #00000050;
     --color-fg-2: #839496;
     --color-fg-3: color-mix(in srgb, var(--color-fg-2) 40%, var(--color-bg));
+
+    --fixed-margin-inline: 1rem;
+    --margin-inline: calc(min(var(--fixed-margin-inline), 2.5vw));
+    --margin-inline-thin: calc(var(--margin-inline) * 0.5);
+    --margin-inline-wide: calc(var(--margin-inline) * 1.5 + 0.5rem);
+
+    --fixed-margin-block: 0.5rem;
+    --margin-block: var(--fixed-margin-block);
+    --margin-block-wide: calc(var(--margin-block) + 0.5rem);
+
+    --border-radius: 0.5rem;
+
+    color: var(--color-fg);
+    font-family: 'Palatino', 'Palatino Linotype', serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-weight: lighter;
 }
 
 
@@ -84,7 +108,7 @@ button:active {
 
 blockquote {
     margin-inline: auto;
-    padding-inline: 1rem;
+    padding-inline: 1em;
     position: relative;
     width: max-content;
     max-width: 75%;
@@ -127,8 +151,8 @@ code::before,
 code::after {
     color: var(--color-fg-2);
     opacity: 0.25;
-    font-size: 1.5em;
-    vertical-align: top;
+    font-size: 1.25em;
+    vertical-align: middle;
     margin-block: 0.25em;
 }
 
@@ -157,22 +181,22 @@ pre>code {
     display: block;
     border-radius: 0;
     overflow-x: overlay;
-    padding-block: 0.5rem;
+    padding-block: var(--margin-block);
     margin-inline: 0;
-    padding-inline: 1rem;
+    padding-inline: 1.5em;
     margin-inline: 0;
 }
 
 
 figure {
-    padding-block: 0.5rem;
-    margin-block: 0.5rem;
+    padding-block: var(--margin-block);
+    margin-block: var(--margin-block);
     border: thin solid var(--color-fg-3);
     box-shadow: 0 0.125rem 0.5rem var(--color-shadow);
-    border-radius: 0.5rem;
+    border-radius: var(--border-radius);
 
     margin-inline: auto;
-    padding-inline: 1rem;
+    padding-inline: var(--margin-inline);
     width: max-content;
     max-width: 95%;
     min-width: 12.5%;
@@ -190,7 +214,7 @@ figcaption {
 }
 
 hr {
-    margin-block: 1rem;
+    margin-block: var(--margin-block-wide);
     margin-inline: auto;
     width: 50%;
     border: none;
@@ -199,7 +223,21 @@ hr {
 
 details>summary {
     cursor: default;
+    list-style-type: none;
 }
+
+details>summary::-webkit-details-marker {
+    display: none;
+}
+
+details>summary::before {
+    content: '+ '
+}
+
+details[open]>summary::before {
+    content: '\002212\000020'
+}
+
 
 p:first-child {
     margin-block-start: 0;
@@ -207,4 +245,14 @@ p:first-child {
 
 p:last-child {
     margin-block-end: 0;
+}
+
+summary>h1,
+summary>h2,
+summary>h3,
+summary>h4,
+summary>h5,
+summary>h6 {
+    display: inline-block;
+    margin-block: 0;
 }

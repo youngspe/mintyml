@@ -23,19 +23,22 @@ class Demo {
         let theme = document.getElementById('theme')
         let host = (_root.getRootNode() ?? document) as DocumentFragment
 
-        this._viewOutputContainer = host.getElementById('view-out') as HTMLElement
+        this._viewOutputContainer = host.querySelector('#view-out') as HTMLIFrameElement
 
-        {
-            const viewOutShadow = this._viewOutputContainer.attachShadow({ mode: 'open' })
-
+        const viewOutDoc = this._viewOutputContainer.contentDocument
+        if (viewOutDoc) {
             if (theme) {
-                viewOutShadow.appendChild(theme.cloneNode(true))
+                viewOutDoc.head.appendChild(theme.cloneNode(true))
             }
+            const base = document.createElement('base')
+            base.target = "_parent"
+            viewOutDoc.head.appendChild(base)
 
             this._viewOutput = document.createElement("view-output")
             this._viewOutput.style.display = 'contents'
 
-            viewOutShadow.append(this._viewOutput)
+            viewOutDoc.body.append(this._viewOutput)
+
         }
 
         {
@@ -95,7 +98,9 @@ class Demo {
                 session.clearAnnotations()
                 this._textOutput.setValue(e.data.output, 0)
                 this._textOutput.clearSelection()
-                this._viewOutput.innerHTML = e.data.output
+                if (this._viewOutput) {
+                    this._viewOutput.innerHTML = e.data.output
+                }
             } else {
                 const annotations: ace.Ace.Annotation[] = []
                 if (e.data.error.syntax_errors) {

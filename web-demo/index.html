@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Webpack App</title>
   <link id="theme" rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="index.css">
@@ -10,7 +11,9 @@
 
 <body>
   <header>
-    <h1>MinTyML Demo</h1>
+    <div class="page-content">
+      <h1>MinTyML Demo</h1>
+    </div>
   </header>
   <main>
     <demo-container class="page-content">
@@ -45,44 +48,45 @@ article {
   section {
     h2> Basic structure
 
+    h3> Paragraphs
+
+
+
     h3> Elements
 
-    h4> Examples
+    h2> Examples
 
-    section {
-      >b> Inline code
+    section>details[open] {
+      summary>h3> Links
 
-      foo <`bar`> baz
-    }
+      .figures {
+        figure> {
+          ```
+          > {
+            Click
+            a[href=http://www.example.com]> here
 
-    section {
-      >b> Link
-    }
-    .figures {
-      figure> {
-        ```
-        Click
-        a[href=www.example.com]> here
+            for more information.
+          }
+          ```
+          hr>
+          section>> {
+            Click
+            a[href=http://www.example.com]> here
 
-        for more information.
-        ```
-        hr>
-        section>> {
-          Click
-          a[href=www.example.com]> here
-
-          for more information.
+            for more information.
+          }
+          figcaption> A link declared with a line element inside a line-block.
         }
-        figcaption> A link declared with a line element.
-      }
 
-      figure> {
-        ```
-        Click <(a[href=www.example.com]> here)> for more information.
-        ```
-        hr>
-        section>> Click <(a[href=www.example.com]> here)> for more information.
-        figcaption> A link declared with an inline element.
+        figure> {
+          ```
+          Click <(a[href=http://www.example.com]> here)> for more information.
+          ```
+          hr>
+          section>> Click <(a[href=http://www.example.com]> here)> for more information.
+          figcaption> A link declared with an inline element.
+        }
       }
     }
 
@@ -101,7 +105,7 @@ article {
       <output>
         <div id="text-out-wrapper" class="main-flow-item">
           <section>
-            <details open>
+            <details>
               <summary>
                 <h2>HTML Output</h2>
               </summary>
@@ -118,13 +122,18 @@ article {
               <summary>
                 <h2>Preview</h2>
               </summary>
-              <div id="view-out"></div>
+              <iframe id="view-out" title="Preview"></iframe>
             </details>
           </section>
         </div>
       </output>
     </demo-container>
   </main>
+  <footer>
+    <div class="page-content">
+      <small>© 2024 Spencer Young</small>
+    </div>
+  </footer>
 </body>
 
 </html>
