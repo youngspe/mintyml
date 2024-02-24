@@ -5,167 +5,17 @@ use core::{
     mem,
 };
 
-use alloc::{
-    borrow::{Cow, ToOwned},
-    string::String,
-};
+use alloc::{borrow::Cow, string::String};
 
 use crate::{
     escape::{unescape_parts, UnescapePart},
-    ir::{
-        Document, Element, ElementDelimiter, ElementKind, Node, Selector, SelectorElement, Space,
-        SpecialKind,
-    },
-    utils::default,
+    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement, Space},
+    transform::infer_elements::ContentMode,
+    utils::{default, to_lowercase},
+    SpecialTagConfig,
 };
 
 use self::utils::trim_multiline;
-
-#[non_exhaustive]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ContentMode {
-    #[default]
-    Block,
-    Inline,
-}
-
-#[non_exhaustive]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ContentInference<'lt> {
-    pub mode: ContentMode,
-    pub block: &'lt str,
-    pub line: &'lt str,
-    pub inline: &'lt str,
-    pub paragraph: Option<&'lt str>,
-    pub is_raw: bool,
-}
-
-impl<'lt> ContentInference<'lt> {
-    const DEFAULT: ContentInference<'static> = ContentInference {
-        mode: ContentMode::Block,
-        block: "div",
-        line: "p",
-        inline: "span",
-        paragraph: None,
-        is_raw: false,
-    };
-}
-
-fn get_inference<'cx>(tag: &str, ci: ContentInference<'cx>) -> ContentInference<'cx> {
-    const SECTION: ContentInference = ContentInference {
-        mode: ContentMode::Block,
-        block: "div",
-        line: "p",
-        inline: "span",
-        paragraph: Some("p"),
-        ..ContentInference::DEFAULT
-    };
-    const PARAGRAPH: ContentInference = ContentInference {
-        mode: ContentMode::Inline,
-        block: "span",
-        line: "span",
-        inline: "span",
-        paragraph: None,
-        ..ContentInference::DEFAULT
-    };
-
-    match tag {
-        "div" | "section" | "article" | "header" | "footer" | "main" | "hgroup" | "body"
-        | "dialog" | "nav" => SECTION,
-        "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "span" | "b" | "i" | "q" | "s" | "u" | "abbr"
-        | "button" | "caption" | "cite" | "code" | "data" | "dd" | "dfn" | "dt" | "em"
-        | "figcaption" | "kbd" | "legend" | "mark" | "meter" | "option" | "output" | "picture"
-        | "pre" | "progress" | "samp" | "small" | "strong" | "sub" | "summary" | "sup"
-        | "textarea" | "td" | "th" | "time" | "var" => PARAGRAPH,
-        "ul" | "ol" | "menu" => ContentInference {
-            block: "li",
-            line: "li",
-            inline: "li",
-            paragraph: Some("li"),
-            ..ci
-        },
-        "head" => ContentInference {
-            mode: ContentMode::Block,
-            ..default()
-        },
-        "li" => match ci.mode {
-            ContentMode::Inline => PARAGRAPH,
-            _ => ContentInference {
-                mode: ci.mode,
-                ..SECTION
-            },
-        },
-        "datalist" | "optgroup" | "select" => ContentInference {
-            mode: ContentMode::Block,
-            block: "option",
-            line: "option",
-            inline: "option",
-            paragraph: Some("option"),
-            ..ci
-        },
-        "table" | "tbody" | "thead" | "tfoot" => ContentInference {
-            mode: ContentMode::Block,
-            block: "tr",
-            line: "tr",
-            inline: "tr",
-            paragraph: Some("tr"),
-            ..default()
-        },
-        "tr" => ContentInference {
-            block: "td",
-            line: "td",
-            inline: "td",
-            paragraph: Some("td"),
-            ..SECTION
-        },
-        "colgroup" => ContentInference {
-            block: "col",
-            line: "col",
-            inline: "col",
-            ..default()
-        },
-        "dl" => ContentInference {
-            mode: ContentMode::Block,
-            block: "dd",
-            line: "dt",
-            inline: "dt",
-            paragraph: Some("dd"),
-            ..ci
-        },
-        "map" => ContentInference {
-            mode: ContentMode::Block,
-            block: "area",
-            line: "area",
-            inline: "area",
-            ..default()
-        },
-        "details" => match ci.mode {
-            ContentMode::Inline => ContentInference {
-                mode: ContentMode::Block,
-                block: "summary",
-                line: "summary",
-                inline: "summary",
-                ..PARAGRAPH
-            },
-            _ => ContentInference {
-                mode: ContentMode::Block,
-                block: "summary",
-                line: "summary",
-                inline: "summary",
-                ..ci
-            },
-        },
-        "script" | "style" => ContentInference {
-            is_raw: true,
-            ..Default::default()
-        },
-        "label" => ContentInference {
-            line: "input",
-            ..PARAGRAPH
-        },
-        _ => ci,
-    }
-}
 
 fn is_void(tag: &str) -> bool {
     match tag {
@@ -176,8 +26,7 @@ fn is_void(tag: &str) -> bool {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-struct TagInfo<'cx> {
-    pub ci: ContentInference<'cx>,
+struct TagInfo {
     pub is_void: bool,
 }
 
@@ -187,18 +36,7 @@ pub struct OutputConfig {
     pub indent: Option<Cow<'static, str>>,
     pub xml: Option<bool>,
     pub special_tags: SpecialTagConfig,
-}
-
-#[non_exhaustive]
-#[derive(Debug, Default, Clone)]
-pub struct SpecialTagConfig {
-    pub emphasis: Option<Cow<'static, str>>,
-    pub strong: Option<Cow<'static, str>>,
-    pub underline: Option<Cow<'static, str>>,
-    pub strike: Option<Cow<'static, str>>,
-    pub quote: Option<Cow<'static, str>>,
-    pub code: Option<Cow<'static, str>>,
-    pub code_block_container: Option<Cow<'static, str>>,
+    pub complete_page: Option<bool>,
 }
 
 impl OutputConfig {
@@ -246,16 +84,19 @@ impl OutputConfig {
     pub fn code_block_container_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
         self.update(|c| c.special_tags.code_block_container = Some(tag.into()))
     }
+
+    pub fn complete_page(self, complete_page: bool) -> Self {
+        self.update(|c| c.complete_page = complete_page.into())
+    }
 }
 
 struct OutputContext<'cx, Out> {
     string_buf: String,
     out: &'cx mut Out,
     config: OutputConfig,
+    mode: ContentMode,
     indent_level: usize,
-    ci: ContentInference<'cx>,
-    element_kind: ElementKind,
-    first_line: bool,
+    element: &'cx Element<'cx>,
     follows_space: bool,
 }
 
@@ -426,31 +267,15 @@ where
         write_unescaped(src, &mut *self.out).map_err(Into::into)
     }
 
-    fn lowercase_str(&mut self, src: &str) -> &str {
-        src.clone_into(&mut self.string_buf);
-        self.string_buf.make_ascii_lowercase();
-        &self.string_buf
-    }
+    fn get_info(&mut self, tag: &str) -> TagInfo {
+        let is_void = !self.is_xml() && is_void(to_lowercase(tag, &mut self.string_buf));
 
-    fn get_info(&mut self, tag: &str, ci: ContentInference<'cx>) -> (&str, TagInfo<'cx>) {
-        tag.clone_into(&mut self.string_buf);
-        self.lowercase_str(tag);
-
-        (
-            &self.string_buf,
-            TagInfo {
-                ci: get_inference(tag, ci),
-                is_void: !self.is_xml() && is_void(&self.string_buf),
-            },
-        )
+        TagInfo { is_void }
     }
 
     fn _line(&mut self) -> OutputResult {
         if let Some(indent) = self.config.indent.as_deref() {
-            if !self.first_line {
-                self.out.write_char('\n')?;
-            }
-            self.first_line = false;
+            self.out.write_char('\n')?;
             for _ in 0..self.indent_level {
                 self.out.write_str(indent)?;
             }
@@ -459,8 +284,9 @@ where
 
         Ok(())
     }
+
     fn line(&mut self) -> OutputResult {
-        if !self.follows_space && self.ci.mode == ContentMode::Block {
+        if !self.follows_space && self.mode == ContentMode::Block {
             self._line()
         } else {
             Ok(())
@@ -471,7 +297,7 @@ where
         if !self.follows_space {
             match space {
                 Space::LineEnd | Space::ParagraphEnd
-                    if self.ci.mode == ContentMode::Block && self.config.indent.is_some() =>
+                    if self.mode == ContentMode::Block && self.config.indent.is_some() =>
                 {
                     self._line()?
                 }
@@ -483,7 +309,7 @@ where
     }
 
     fn indent<T>(&mut self, f: impl FnOnce(&mut Self) -> OutputResult<T>) -> OutputResult<T> {
-        if self.ci.mode == ContentMode::Block {
+        if self.mode == ContentMode::Block {
             if self.config.indent.is_some() {
                 self.indent_level += 1;
                 let out = f(self);
@@ -499,15 +325,15 @@ where
 
     fn in_content<T>(
         &mut self,
-        mut ci: ContentInference<'cx>,
-        mut element_kind: ElementKind,
+        mut mode: ContentMode,
+        mut element: &'cx Element<'cx>,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
-        mem::swap(&mut ci, &mut self.ci);
-        mem::swap(&mut element_kind, &mut self.element_kind);
+        mem::swap(&mut mode, &mut self.mode);
+        mem::swap(&mut element, &mut self.element);
         let out = f(self);
-        self.ci = ci;
-        self.element_kind = element_kind;
+        self.mode = mode;
+        self.element = element;
         out
     }
 
@@ -568,65 +394,27 @@ where
         Ok(())
     }
 
-    fn process_element(&mut self, element: &Element) -> OutputResult {
-        let Some(tag) = (match (&element.selector.element, &element.kind) {
-            (SelectorElement::Name(s), _) => Some(match *s {
-                Cow::Borrowed(s) => Cow::Borrowed(s),
-                Cow::Owned(ref s) => Cow::Borrowed(s as &str),
-            }),
-            (SelectorElement::Special(kind), _) => {
-                let special_tags = &self.config.special_tags;
-                let (custom, default) = match kind {
-                    SpecialKind::Emphasis => (&special_tags.emphasis, "em"),
-                    SpecialKind::Strong => (&special_tags.strong, "strong"),
-                    SpecialKind::Underline => (&special_tags.underline, "u"),
-                    SpecialKind::Strike => (&special_tags.strike, "s"),
-                    SpecialKind::Quote => (&special_tags.quote, "q"),
-                    SpecialKind::Code => (&special_tags.code, "code"),
-                    SpecialKind::CodeBlockContainer => (&special_tags.code_block_container, "pre"),
-                };
-                Some(custom.as_ref().cloned().unwrap_or(default.into()))
-            }
-            (SelectorElement::Infer, ElementKind::Block) => Some(self.ci.block.into()),
-            (SelectorElement::Infer, ElementKind::Inline(_)) => Some(self.ci.inline.into()),
-            (SelectorElement::Infer, ElementKind::Line | ElementKind::LineBlock) => {
-                Some(self.ci.line.into())
-            }
-            (SelectorElement::Infer, ElementKind::Paragraph) => match self.element_kind {
-                ElementKind::Line
-                | ElementKind::LineBlock
-                | ElementKind::Inline(
-                    None | Some(ElementDelimiter::Line | ElementDelimiter::LineBlock),
-                ) => None,
-                _ => self.ci.paragraph.map(Cow::Borrowed),
-            },
-        }) else {
-            return self.in_content(
-                ContentInference {
-                    mode: ContentMode::Inline,
-                    ..self.ci
-                },
-                element.kind,
-                |this| {
-                    element
-                        .nodes
-                        .iter()
-                        .try_for_each(|node| this.process_node(node))
-                },
-            );
+    fn process_element(&mut self, element: &'cx Element<'cx>) -> OutputResult {
+        let SelectorElement::Name(tag) = &element.selector.element else {
+            return self.in_content(ContentMode::Inline, element, |this| {
+                element
+                    .nodes
+                    .iter()
+                    .try_for_each(|node| this.process_node(node))
+            });
         };
 
         let mode = match element.kind {
-            ElementKind::Block => self.ci.mode,
+            ElementKind::Block => self.mode,
             _ => ContentMode::Inline,
         };
-        let (_, tag_info) = self.get_info(&tag, ContentInference { mode, ..self.ci });
+        let tag_info = self.get_info(&tag);
 
-        if element.nodes.len() == 0 && self.is_xml() {
+        if element.nodes.is_empty() && self.is_xml() {
             self.write_open_tag(&tag, &element.selector, true)
         } else {
             self.write_open_tag(&tag, &element.selector, false)?;
-            self.in_content(tag_info.ci, element.kind, |this| {
+            self.in_content(mode, element, |this| {
                 if !element.nodes.is_empty() {
                     this.indent(|this| {
                         this.line()?;
@@ -645,13 +433,13 @@ where
         }
     }
 
-    fn process_node(&mut self, node: &Node) -> OutputResult {
+    fn process_node(&mut self, node: &'cx Node<'cx>) -> OutputResult {
         let out = match node {
             Node::Element(e) => self.process_element(e)?,
             Node::Text(text) if text.value.is_empty() => {}
             Node::Text(text) => {
                 let escape = text.escape;
-                let is_raw = self.ci.is_raw;
+                let is_raw = self.element.is_raw;
                 let mut write = |value| match (escape, is_raw) {
                     (true, true) => self.write_unescape(value),
                     (true, false) => self.write_escape_unescape(value, false),
@@ -711,16 +499,8 @@ pub fn output_html_to(
         out,
         config,
         indent_level: 0,
-        ci: ContentInference {
-            mode: ContentMode::Block,
-            block: "div",
-            line: "p",
-            inline: "span",
-            paragraph: Some("p"),
-            is_raw: false,
-        },
-        element_kind: ElementKind::Block,
-        first_line: true,
+        element: &default(),
+        mode: ContentMode::Block,
         follows_space: true,
     };
     document

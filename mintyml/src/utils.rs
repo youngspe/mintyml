@@ -153,5 +153,16 @@ pub fn try_extend<T, E>(
     out: &mut impl Extend<T>,
     src: impl IntoIterator<Item = Result<T, E>>,
 ) -> Result<(), E> {
-    src.into_iter().try_for_each(|item| item.map(|x| out.extend([x])))
+    src.into_iter()
+        .try_for_each(|item| item.map(|x| out.extend([x])))
+}
+
+pub fn to_lowercase<'lt>(src: &'lt str, buf: &'lt mut String) -> &'lt str {
+    if src.chars().all(|c| c.is_ascii_lowercase()) {
+        return src;
+    }
+
+    src.clone_into(buf);
+    buf.make_ascii_lowercase();
+    buf
 }

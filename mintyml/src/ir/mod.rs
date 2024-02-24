@@ -130,11 +130,22 @@ impl<'src> ToStatic for Node<'src> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Element<'src> {
     pub selector: Selector<'src>,
     pub nodes: Vec<Node<'src>>,
     pub kind: ElementKind,
+    pub is_raw: bool,
+}
+
+impl<'src> Element<'src> {
+    pub fn with_tag(tag: impl Into<Cow<'src, str>>) -> Self {
+        Self {
+            selector: SelectorElement::Name(tag.into()).into(),
+            ..default()
+        }
+    }
 }
 
 impl<'src> ToStatic for Element<'src> {
@@ -144,6 +155,7 @@ impl<'src> ToStatic for Element<'src> {
             selector: self.selector.to_static(),
             nodes: self.nodes.to_static(),
             kind: self.kind,
+            is_raw: self.is_raw,
         }
     }
 }
@@ -223,10 +235,11 @@ pub enum ElementDelimiter {
     Block,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ElementKind {
     Line,
     LineBlock,
+    #[default]
     Block,
     Inline(Option<ElementDelimiter>),
     Paragraph,
@@ -524,12 +537,14 @@ fn build_multiline_code<'src>(
         kind: ElementKind::Paragraph,
         selector: SelectorElement::Special(SpecialKind::Code).into(),
         nodes: vec![inner],
+        ..default()
     };
 
     let pre = Element {
         kind: ElementKind::Block,
         selector: SelectorElement::Special(SpecialKind::CodeBlockContainer).into(),
         nodes: vec![code.into()],
+        ..default()
     };
 
     Ok(pre.into())
@@ -618,6 +633,7 @@ fn build_inline_special<'src>(
         },
         nodes,
         kind: ElementKind::Inline(None),
+        ..default()
     })
     .map(Node::Element)
 }
@@ -655,6 +671,7 @@ fn build_text_line_part<'src>(
                 selector: Selector::build_from_ast(cx, selector)?,
                 nodes: build_element_body(cx, body)?,
                 kind: ElementKind::Inline(Some(get_delimiter(body))),
+                ..default()
             }
             .into()),
             ast::Node::Element {
@@ -663,6 +680,7 @@ fn build_text_line_part<'src>(
                 selector: default(),
                 nodes: build_element_body(cx, body)?,
                 kind: ElementKind::Inline(Some(get_delimiter(body))),
+                ..default()
             }
             .into()),
             ast::Node::Paragraph { paragraph } => Ok(Element {
@@ -674,9 +692,8 @@ fn build_text_line_part<'src>(
         Inline {
             inline: ast::Inline { inner: None, .. },
         } => Ok(Element {
-            selector: default(),
-            nodes: default(),
             kind: ElementKind::Inline(None),
+            ..default()
         }
         .into()),
         InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
@@ -700,6 +717,7 @@ fn build_paragraph<'src>(
         selector: default(),
         nodes,
         kind: ElementKind::Paragraph,
+        ..default()
     })
 }
 
@@ -735,11 +753,13 @@ fn build_element<'src>(
             selector: Selector::build_from_ast(cx, selector)?,
             nodes: build_element_body(cx, body)?,
             kind: get_default_kind(body),
+            ..default()
         }),
         ast::Element::Body { body } => Ok(Element {
             selector: default(),
             nodes: build_element_body(cx, body)?,
             kind: get_default_kind(body),
+            ..default()
         }),
     }
 }

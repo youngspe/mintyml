@@ -11,6 +11,7 @@ pub(crate) mod ast;
 pub(crate) mod escape;
 pub(crate) mod ir;
 pub(crate) mod output;
+pub(crate) mod transform;
 pub(crate) mod utils;
 
 use alloc::{borrow::Cow, string::String, vec::Vec};
@@ -62,14 +63,39 @@ impl From<OutputError> for ConvertError<'_> {
     }
 }
 
+#[non_exhaustive]
+#[derive(Debug, Default, Clone)]
+pub struct SpecialTagConfig {
+    pub emphasis: Option<Cow<'static, str>>,
+    pub strong: Option<Cow<'static, str>>,
+    pub underline: Option<Cow<'static, str>>,
+    pub strike: Option<Cow<'static, str>>,
+    pub quote: Option<Cow<'static, str>>,
+    pub code: Option<Cow<'static, str>>,
+    pub code_block_container: Option<Cow<'static, str>>,
+}
+
 pub fn convert(src: &str, config: OutputConfig) -> Result<String, ConvertError> {
-    let document = Document::parse(src).map_err(|e| ConvertError::Syntax {
+    let mut out = String::new();
+    convert_to(src, config, &mut out)?;
+    Ok(out)
+}
+
+pub fn convert_to<'src>(
+    src: &'src str,
+    config: OutputConfig,
+    out: &mut impl fmt::Write,
+) -> Result<(), ConvertError<'src>> {
+    let mut document = Document::parse(src).map_err(|e| ConvertError::Syntax {
         syntax_errors: e,
         src: src.into(),
     })?;
-    let mut out = String::new();
-    output::output_html_to(&document, &mut out, config).map_err(|e| match e {
+
+    transform::infer_elements::infer_elements(&mut document, &config.special_tags);
+
+    output::output_html_to(&document, out, config).map_err(|e| match e {
         OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
     })?;
-    Ok(out)
+
+    Ok(())
 }
