@@ -130,6 +130,14 @@ impl<'src> ToStatic for Node<'src> {
     }
 }
 
+#[non_exhaustive]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ContentMode {
+    #[default]
+    Block,
+    Inline,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Element<'src> {
@@ -137,6 +145,7 @@ pub struct Element<'src> {
     pub nodes: Vec<Node<'src>>,
     pub kind: ElementKind,
     pub is_raw: bool,
+    pub mode: ContentMode,
 }
 
 impl<'src> Element<'src> {
@@ -156,6 +165,7 @@ impl<'src> ToStatic for Element<'src> {
             nodes: self.nodes.to_static(),
             kind: self.kind,
             is_raw: self.is_raw,
+            mode: self.mode,
         }
     }
 }

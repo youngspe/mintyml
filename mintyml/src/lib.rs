@@ -8,8 +8,9 @@ extern crate gramma;
 extern crate thiserror;
 
 pub(crate) mod ast;
+pub(crate) mod config;
+pub(crate) mod document;
 pub(crate) mod escape;
-pub(crate) mod ir;
 pub(crate) mod output;
 pub(crate) mod transform;
 pub(crate) mod utils;
@@ -17,11 +18,11 @@ pub(crate) mod utils;
 use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::fmt;
 
-use ir::{Document, ToStatic};
+use document::{Document, ToStatic};
 use output::OutputError;
 
-pub use ir::{SyntaxError, SyntaxErrorKind};
-pub use output::OutputConfig;
+pub use config::{OutputConfig, SpecialTagConfig};
+pub use document::{SyntaxError, SyntaxErrorKind};
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -63,19 +64,10 @@ impl From<OutputError> for ConvertError<'_> {
     }
 }
 
-#[non_exhaustive]
-#[derive(Debug, Default, Clone)]
-pub struct SpecialTagConfig {
-    pub emphasis: Option<Cow<'static, str>>,
-    pub strong: Option<Cow<'static, str>>,
-    pub underline: Option<Cow<'static, str>>,
-    pub strike: Option<Cow<'static, str>>,
-    pub quote: Option<Cow<'static, str>>,
-    pub code: Option<Cow<'static, str>>,
-    pub code_block_container: Option<Cow<'static, str>>,
-}
-
-pub fn convert(src: &str, config: OutputConfig) -> Result<String, ConvertError> {
+pub fn convert<'src>(
+    src: &'src str,
+    config: OutputConfig<'src>,
+) -> Result<String, ConvertError<'src>> {
     let mut out = String::new();
     convert_to(src, config, &mut out)?;
     Ok(out)
@@ -83,7 +75,7 @@ pub fn convert(src: &str, config: OutputConfig) -> Result<String, ConvertError> 
 
 pub fn convert_to<'src>(
     src: &'src str,
-    config: OutputConfig,
+    config: OutputConfig<'src>,
     out: &mut impl fmt::Write,
 ) -> Result<(), ConvertError<'src>> {
     let mut document = Document::parse(src).map_err(|e| ConvertError::Syntax {
@@ -92,7 +84,7 @@ pub fn convert_to<'src>(
     })?;
 
     if config.complete_page.unwrap_or(false) {
-        transform::complete_page::complete_page(&mut document);
+        transform::complete_page::complete_page(&mut document, &config);
     }
 
     transform::infer_elements::infer_elements(&mut document, &config.special_tags);

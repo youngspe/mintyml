@@ -1,7 +1,10 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec;
 use core::mem;
 
-use crate::ir::{Document, Element, Node, Selector, SelectorElement};
+use crate::{
+    document::{Attribute, Document, Element, Node, Selector, SelectorElement, Space},
+    OutputConfig,
+};
 
 /// Tags that generally belong in a `<head>` element.
 const METADATA_TAGS: &[&str] = &["base", "link", "meta", "title", "style"];
@@ -15,7 +18,7 @@ where
 {
     let tags = tags.into_iter();
     match node {
-        crate::ir::Node::Element(e) => match e {
+        crate::document::Node::Element(e) => match e {
             Element {
                 selector:
                     Selector {
@@ -41,13 +44,38 @@ where
 }
 
 /// Transforms `doc` so that its nodes are wrapped in `<html>` tags with a `<head>` and `<body>`
-pub fn complete_page<'src>(doc: &mut Document<'src>) {
-    if doc.nodes.iter_mut().any(|n| has_tag_in(n, ["html"])) {
-        // There's already an <html> tag so we're done.
+pub fn complete_page<'src>(doc: &mut Document<'src>, config: &OutputConfig<'src>) {
+    if let Some(root) = doc
+        .nodes
+        .iter_mut()
+        .find_map(|n| extract_element_with_tag_in(n, ["html"]))
+    {
+        // There's already an <html> tag so no need to restructure.
+        if let Some(lang) = config.lang.as_ref() {
+            if !root
+                .selector
+                .attributes
+                .iter()
+                .any(|attr| attr.name == "lang")
+            {
+                root.selector.attributes.push(Attribute {
+                    name: "lang".into(),
+                    value: Some(lang.clone()),
+                })
+            }
+        }
+
         return;
     }
 
     let mut root = Element::with_tag("html");
+
+    if let Some(lang) = config.lang.as_ref() {
+        root.selector.attributes.push(Attribute {
+            name: "lang".into(),
+            value: Some(lang.clone()),
+        })
+    }
 
     if doc.nodes.iter_mut().any(|n| has_tag_in(n, ["body"])) {
         // There's already a body tag so just wrap it all in <html> and call it good.
@@ -71,7 +99,7 @@ pub fn complete_page<'src>(doc: &mut Document<'src>) {
             })
             .collect();
 
-        root.nodes = vec![head.into(), body.into()];
+        root.nodes = vec![head.into(), Node::Space(Space::ParagraphEnd), body.into()];
     }
 
     doc.nodes = vec![root.into()];

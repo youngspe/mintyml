@@ -5,14 +5,13 @@ use core::{
     mem,
 };
 
-use alloc::{borrow::Cow, string::String};
+use alloc::string::String;
 
 use crate::{
+    document::{ContentMode, Document, Element, Node, Selector, SelectorElement, Space},
     escape::{unescape_parts, UnescapePart},
-    ir::{Document, Element, ElementKind, Node, Selector, SelectorElement, Space},
-    transform::infer_elements::ContentMode,
     utils::{default, to_lowercase},
-    SpecialTagConfig,
+    OutputConfig,
 };
 
 use self::utils::trim_multiline;
@@ -28,74 +27,15 @@ fn is_void(tag: &str) -> bool {
 #[derive(Debug, Default, Clone, Copy)]
 struct TagInfo {
     pub is_void: bool,
-}
-
-#[non_exhaustive]
-#[derive(Debug, Default, Clone)]
-pub struct OutputConfig {
-    pub indent: Option<Cow<'static, str>>,
-    pub xml: Option<bool>,
-    pub special_tags: SpecialTagConfig,
-    pub complete_page: Option<bool>,
-}
-
-impl OutputConfig {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn update(mut self, f: impl FnOnce(&mut Self)) -> Self {
-        f(&mut self);
-        self
-    }
-
-    pub fn indent(self, indent: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.indent = Some(indent.into()))
-    }
-
-    pub fn xml(self, xml: bool) -> Self {
-        self.update(|c| c.xml = Some(xml))
-    }
-
-    pub fn emphasis_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.emphasis = Some(tag.into()))
-    }
-
-    pub fn strong_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.strong = Some(tag.into()))
-    }
-
-    pub fn underline_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.underline = Some(tag.into()))
-    }
-
-    pub fn strike_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.strike = Some(tag.into()))
-    }
-
-    pub fn quote_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.quote = Some(tag.into()))
-    }
-
-    pub fn code_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.code = Some(tag.into()))
-    }
-
-    pub fn code_block_container_tag(self, tag: impl Into<Cow<'static, str>>) -> Self {
-        self.update(|c| c.special_tags.code_block_container = Some(tag.into()))
-    }
-
-    pub fn complete_page(self, complete_page: bool) -> Self {
-        self.update(|c| c.complete_page = complete_page.into())
-    }
+    pub is_root: bool,
 }
 
 struct OutputContext<'cx, Out> {
     string_buf: String,
     out: &'cx mut Out,
-    config: OutputConfig,
+    config: OutputConfig<'cx>,
     mode: ContentMode,
-    indent_level: usize,
+    indent_level: u32,
     element: &'cx Element<'cx>,
     follows_space: bool,
 }
@@ -268,9 +208,10 @@ where
     }
 
     fn get_info(&mut self, tag: &str) -> TagInfo {
+        let is_root = tag.eq_ignore_ascii_case("html");
         let is_void = !self.is_xml() && is_void(to_lowercase(tag, &mut self.string_buf));
 
-        TagInfo { is_void }
+        TagInfo { is_void, is_root }
     }
 
     fn _line(&mut self) -> OutputResult {
@@ -286,7 +227,7 @@ where
     }
 
     fn line(&mut self) -> OutputResult {
-        if !self.follows_space && self.mode == ContentMode::Block {
+        if !self.follows_space && self.element.mode == ContentMode::Block {
             self._line()
         } else {
             Ok(())
@@ -297,7 +238,7 @@ where
         if !self.follows_space {
             match space {
                 Space::LineEnd | Space::ParagraphEnd
-                    if self.mode == ContentMode::Block && self.config.indent.is_some() =>
+                    if self.element.mode == ContentMode::Block && self.config.indent.is_some() =>
                 {
                     self._line()?
                 }
@@ -308,12 +249,16 @@ where
         Ok(())
     }
 
-    fn indent<T>(&mut self, f: impl FnOnce(&mut Self) -> OutputResult<T>) -> OutputResult<T> {
-        if self.mode == ContentMode::Block {
+    fn indent<T>(
+        &mut self,
+        by: u32,
+        f: impl FnOnce(&mut Self) -> OutputResult<T>,
+    ) -> OutputResult<T> {
+        if self.element.mode == ContentMode::Block {
             if self.config.indent.is_some() {
-                self.indent_level += 1;
+                self.indent_level += by;
                 let out = f(self);
-                self.indent_level -= 1;
+                self.indent_level -= by;
                 out
             } else {
                 f(self)
@@ -325,14 +270,11 @@ where
 
     fn in_content<T>(
         &mut self,
-        mut mode: ContentMode,
         mut element: &'cx Element<'cx>,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
-        mem::swap(&mut mode, &mut self.mode);
         mem::swap(&mut element, &mut self.element);
         let out = f(self);
-        self.mode = mode;
         self.element = element;
         out
     }
@@ -396,7 +338,7 @@ where
 
     fn process_element(&mut self, element: &'cx Element<'cx>) -> OutputResult {
         let SelectorElement::Name(tag) = &element.selector.element else {
-            return self.in_content(ContentMode::Inline, element, |this| {
+            return self.in_content(element, |this| {
                 element
                     .nodes
                     .iter()
@@ -404,19 +346,15 @@ where
             });
         };
 
-        let mode = match element.kind {
-            ElementKind::Block => self.mode,
-            _ => ContentMode::Inline,
-        };
         let tag_info = self.get_info(&tag);
 
         if element.nodes.is_empty() && self.is_xml() {
             self.write_open_tag(&tag, &element.selector, true)
         } else {
             self.write_open_tag(&tag, &element.selector, false)?;
-            self.in_content(mode, element, |this| {
+            self.in_content(element, |this| {
                 if !element.nodes.is_empty() {
-                    this.indent(|this| {
+                    this.indent(if tag_info.is_root { 0 } else { 1 }, |this| {
                         this.line()?;
                         element
                             .nodes
