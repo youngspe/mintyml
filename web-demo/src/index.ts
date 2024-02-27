@@ -4,41 +4,55 @@ import * as ace from 'ace-builds'
 import 'ace-builds/src-noconflict/theme-solarized_dark'
 import 'ace-builds/src-noconflict/theme-solarized_light'
 import 'ace-builds/src-noconflict/mode-html'
+import 'ace-builds/src-noconflict/ext-searchbox'
 
 
 const POST_SEND_DELAY = 3000
 const POST_RECV_DELAY = 100
+
+const storedTextInputKey = 'stored-text-input'
+
+function updateQuery(key: string, value: string | null, push: boolean = false) {
+    const url = new URL(window.location.href)
+    if (value == null) {
+        url.searchParams.delete(key)
+    } else {
+        url.searchParams.set(key, value)
+    }
+
+    if (push) {
+        history.pushState(null, '', url)
+    } else {
+        history.replaceState(null, '', url)
+    }
+}
 
 class Demo {
     private _worker?: Worker
     private _sent?: number
     private _dirty = false
     private _viewOutputContainer
-    private _viewOutput
     private _editor
     private _textOutput
     private _media
+    private _exampleSelect
 
-    constructor(private _root: HTMLElement) {
-        let theme = document.getElementById('theme')
+    constructor(private _root: HTMLElement, example: string) {
         let host = (_root.getRootNode() ?? document) as DocumentFragment
+        this._exampleSelect = host.getElementById('view-out') as HTMLSelectElement
+        this._viewOutputContainer = host.getElementById('view-out') as HTMLIFrameElement
 
         this._viewOutputContainer = host.querySelector('#view-out') as HTMLIFrameElement
 
         const viewOutDoc = this._viewOutputContainer.contentDocument
         if (viewOutDoc) {
+            const theme = document.getElementById('theme')
             if (theme) {
                 viewOutDoc.head.appendChild(theme.cloneNode(true))
             }
             const base = document.createElement('base')
             base.target = "_parent"
             viewOutDoc.head.appendChild(base)
-
-            this._viewOutput = document.createElement("view-output")
-            this._viewOutput.style.display = 'contents'
-
-            viewOutDoc.body.append(this._viewOutput)
-
         }
 
         {
@@ -49,7 +63,11 @@ class Demo {
                 printMargin: false,
             } satisfies Partial<ace.Ace.EditorOptions>
 
-            this._editor = ace.edit(host.getElementById('editor')!, {
+            const editElement = host.getElementById('editor')!
+
+            editElement.textContent = example
+
+            this._editor = ace.edit(editElement, {
                 ...options,
                 displayIndentGuides: true,
                 useSoftTabs: true,
@@ -72,17 +90,42 @@ class Demo {
         this._media = window.matchMedia("(prefers-color-scheme: dark)")
     }
 
+    private _updateDoc(src: string) {
+        const template = document.createElement('template')
+        const srcDom = new DOMParser().parseFromString(src, 'text/html')
+        template.content.replaceChildren()
+
+        const outHead = this._viewOutputContainer.contentDocument!.head
+        for (const child of outHead.querySelectorAll('.-user-provided')) {
+            child.remove()
+        }
+
+        const srcHeadChildren = srcDom.head.querySelectorAll('title,link,style')
+        for (const child of srcHeadChildren) {
+            child.classList.add('-user-provided')
+        }
+
+        outHead.append(...srcHeadChildren)
+
+        this._viewOutputContainer.contentDocument?.querySelector('body')?.replaceWith(srcDom.body)
+    }
+
     private _onSchemeChange = (e: MediaQueryListEvent) => {
         this._updateTheme(e.matches)
+    }
+
+    private _onExampleSelect = (e: Event) => {
+
     }
 
     private _markers: number[] = []
 
     init() {
+        this._exampleSelect.addEventListener('change', this._onExampleSelect)
         this._media.addEventListener('change', this._onSchemeChange)
         this._updateTheme(this._media.matches)
 
-        this._editor.on('input', () => this._update())
+        this._editor.on('input', this._update)
         const worker = this._worker = new Worker(new URL('./worker.ts', import.meta.url))
         this._update()
         worker.onmessage = (e: MessageEvent<ConvertResponseMessage>) => {
@@ -93,14 +136,11 @@ class Demo {
             }
             this._markers = []
 
-
             if ('output' in e.data) {
                 session.clearAnnotations()
                 this._textOutput.setValue(e.data.output, 0)
                 this._textOutput.clearSelection()
-                if (this._viewOutput) {
-                    this._viewOutput.innerHTML = e.data.output
-                }
+                this._updateDoc(e.data.output)
             } else {
                 const annotations: ace.Ace.Annotation[] = []
                 if (e.data.error.syntax_errors) {
@@ -149,7 +189,7 @@ class Demo {
         this._textOutput.setTheme(theme)
     }
 
-    _update() {
+    private _update = () => {
         if (this._dirty) return
         const worker = this._worker
         if (!worker) return
@@ -169,9 +209,20 @@ class Demo {
     deinit() {
         this._worker?.terminate()
         this._worker = undefined
+        this._exampleSelect.removeEventListener('change', this._onExampleSelect)
         this._media.removeEventListener('change', this._onSchemeChange)
+        this._editor.off('input', this._update)
     }
 }
 
-const demo = new Demo(document.querySelector('demo-container')!)
+const params = new URLSearchParams(window.location.search)
+
+let exampleName = params.get('example') ?? 'intro'
+
+fetch(`/${exampleName}.mty`, { headers: { 'Accept': 'application/json' } }).then(async res => {
+    const example = await res.text()
+
+    const demo = new Demo(document.querySelector('demo-container')!, example)
 demo.init()
+})
+

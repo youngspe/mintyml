@@ -6,7 +6,7 @@ let mintyml: Promise<typeof import('mintyml')>
 
 self.onmessage = async function (e: MessageEvent<ConvertRequestMessage>) {
     mintyml ??= import('mintyml')
-    converter ??= new (await mintyml).MintymlConverter({ indent: 2 })
+    converter ??= new (await mintyml).MintymlConverter({ indent: 2, completePage: true })
 
     try {
         let output = converter.convert(e.data.input)

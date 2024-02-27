@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-US">
 
 <head>
   <meta charset="utf-8" />
@@ -23,110 +23,49 @@
             <summary>
               <h2>MinTyML Input</h2>
             </summary>
+            <menu class="menu-bar">
+              <li><fieldset>
+                <label>
+                  Select example
+                  <select id="example-select">
+                    <option>intro</option>
+                    <option>intro2</option>
+                  </select>
+                </label>
+                <button type="button">Reset</button>
+              </fieldset></li>
+              <li><footer>
+                <small>Editor powered by <a href="https://ace.c9.io/">Ace</a></small>
+              </footer></li>
+            </menu>
             <div id="text-in">
-              <pre id="editor"><script
-               type="text/plain"
-               style="display: inline"
->style> <[[
-.figures {
-  display: flex;
-  flex-flow: row wrap;
-  justify-content: space-around;
-  align-items: center;
-}
-.figures>* {
-  margin-inline: 0.5rem;
-}
-figure>samp {
-  padding: 0.5rem;
-  font: inherit;
-  border: thin solid currentcolor;
-}
-]]>
-article {
-  h1> Hello, world!
-  section {
-    h2> Basic structure
-
-    h3> Paragraphs
-
-
-
-    h3> Elements
-
-    h2> Examples
-
-    section>details[open] {
-      summary>h3> Links
-
-      .figures {
-        figure> {
-          ```
-          > {
-            Click
-            a[href=http://www.example.com]> here
-
-            for more information.
-          }
-          ```
-          hr>
-          section>> {
-            Click
-            a[href=http://www.example.com]> here
-
-            for more information.
-          }
-          figcaption> A link declared with a line element inside a line-block.
-        }
-
-        figure> {
-          ```
-          Click <(a[href=http://www.example.com]> here)> for more information.
-          ```
-          hr>
-          section>> Click <(a[href=http://www.example.com]> here)> for more information.
-          figcaption> A link declared with an inline element.
-        }
-      }
-    }
-
-    blockquote {
-      foo
-
-      bar
-    }
-  }
-}
-</script></pre>
+              <pre id="editor"></pre>
             </div>
           </details>
         </section>
       </div>
-      <output>
-        <div id="text-out-wrapper" class="main-flow-item">
-          <section>
-            <details>
-              <summary>
-                <h2>HTML Output</h2>
-              </summary>
-              <div id="text-out">
-                <div id="viewer"></div>
-              </div>
-            </details>
-          </section>
-
-        </div>
-        <div id="view-out-wrapper" class="main-flow-item">
-          <section>
-            <details open>
-              <summary>
-                <h2>Preview</h2>
-              </summary>
-              <iframe id="view-out" title="Preview"></iframe>
-            </details>
-          </section>
-        </div>
-      </output>
+      <div id="text-out-wrapper" class="main-flow-item">
+        <section>
+          <details>
+            <summary>
+              <h2>HTML Output</h2>
+            </summary>
+            <div id="text-out">
+              <div id="viewer"></div>
+            </div>
+          </details>
+        </section>
+      </div>
+      <div id="view-out-wrapper" class="main-flow-item">
+        <section>
+          <details open>
+            <summary>
+              <h2>Preview</h2>
+            </summary>
+            <iframe id="view-out" title="Preview" sandbox="allow-same-origin allow-top-navigation"></iframe>
+          </details>
+        </section>
+      </div>
     </demo-container>
   </main>
   <footer>

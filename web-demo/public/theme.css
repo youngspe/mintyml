@@ -27,11 +27,15 @@ view-output>* {
 
     --fixed-margin-block: 0.5rem;
     --margin-block: var(--fixed-margin-block);
+    --margin-block-thin: calc(var(--margin-block) * 0.5);
     --margin-block-wide: calc(var(--margin-block) + 0.5rem);
 
     --border-radius: 0.5rem;
 
     color: var(--color-fg);
+}
+
+article {
     font-family: 'Palatino', 'Palatino Linotype', serif;
 }
 
@@ -110,15 +114,16 @@ blockquote {
     margin-inline: auto;
     padding-inline: 1em;
     position: relative;
-    width: max-content;
-    max-width: 75%;
+    max-width: calc(max(50rch, 80%));
 }
 
-blockquote::before {
+blockquote:not(:has(>p))::before,
+blockquote>p:first-of-type::before {
     content: open-quote;
 }
 
-blockquote::after {
+blockquote:not(:has(>p))::after,
+blockquote>p:last-of-type::after {
     content: close-quote;
 }
 
@@ -156,22 +161,38 @@ code::after {
     margin-block: 0.25em;
 }
 
-pre>code::before,
-blockquote::before {
+blockquote>p {
+    position: relative;
+}
+
+pre>code::before {
     inset-inline-start: 0;
     inset-block-start: -0.25em;
 }
 
-pre>code::after,
-blockquote::after {
+blockquote:not(:has(>p))::before,
+blockquote>p:first-of-type::before {
+    inset-inline-start: -1ch;
+    inset-block-start: -0.25em;
+}
+
+pre>code::after {
     inset-inline-end: 0;
+    inset-block-end: -0.25em;
+}
+
+blockquote:not(:has(>p))::after,
+blockquote>p:last-of-type::after {
+    inset-inline-end: -1ch;
     inset-block-end: -0.25em;
 }
 
 pre>code::before,
 pre>code::after,
-blockquote::before,
-blockquote::after {
+blockquote:not(:has(>p))::before,
+blockquote>p:first-of-type::before,
+blockquote:not(:has(>p))::after,
+blockquote>p:last-of-type::after {
     opacity: 0.25;
     font-size: 2em;
     position: absolute;
@@ -230,12 +251,17 @@ details>summary::-webkit-details-marker {
     display: none;
 }
 
+details>summary::marker {
+    content: none;
+}
+
 details>summary::before {
-    content: '+ '
+    content: '+ ' / '';
+    vertical-align: middle;
 }
 
 details[open]>summary::before {
-    content: '\002212\000020'
+    content: '\002212\000020' / ''
 }
 
 
@@ -255,4 +281,64 @@ summary>h5,
 summary>h6 {
     display: inline-block;
     margin-block: 0;
+    vertical-align: middle;
+}
+
+footer>cite::before,
+footer>p>cite::before,
+blockquote cite::before,
+blockquote+cite::before,
+blockquote+* cite::before {
+    content: '- ';
+}
+
+blockquote+cite {
+    display: block;
+}
+
+blockquote+cite,
+blockquote+*:has(>cite, >*>cite) {
+    text-align: center;
+}
+
+blockquote>footer,
+blockquote>cite {
+    display: block;
+    text-align: right;
+    margin-inline: calc(0px - var(--margin-inline));
+}
+
+blockquote>p {
+    margin-block: 0.5em;
+}
+
+:is(article, section)>:is(p, h1, h2, h3, h4, h5, h6),
+:is(article, section)>details>summary {
+    max-width: 100rch;
+    margin-inline: auto;
+}
+
+fieldset {
+    border-radius: var(--border-radius);
+    border-inline: thin solid var(--color-fg-3);
+    border-block: none;
+    padding-inline: var(--margin-inline);
+    padding-block: var(--margin-block-thin);
+    box-shadow: 0 0.125rem 0.5rem -0.25rem var(--color-shadow) inset;
+}
+
+fieldset>p {
+    margin-block: var(--margin-block-thin);
+}
+
+fieldset>legend {
+    text-align: center;
+}
+
+select {
+    padding-inline: var(--margin-inline-thin);
+    background: var(--color-bg);
+    color: var(--color-fg-2);
+    border-radius: 0.5em;
+    border: thin solid var(--color-fg-3);
 }

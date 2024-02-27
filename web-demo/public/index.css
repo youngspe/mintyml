@@ -50,10 +50,6 @@ demo-container {
     justify-content: center;
 }
 
-demo-container>output {
-    display: contents;
-}
-
 #editor,
 #viewer {
     height: 100%;
@@ -72,7 +68,6 @@ demo-container>output {
 
 #view-out {
     overflow: overlay;
-    padding-block-end: var(--margin-block-wide);
     padding-inline: var(--margin-inline-thin);
     border: none;
 }
@@ -111,11 +106,6 @@ demo-container>output {
         >details[open] {
             width: 100%;
             height: 100%;
-
-            >summary+* {
-                width: 100%;
-                height: 100%;
-            }
         }
     }
 
@@ -153,7 +143,7 @@ demo-container>output {
 
 body>header,
 body>footer {
-    padding-block: var(--margin-block-wide);
+    padding-block: var(--margin-block-thin);
 }
 
 body>header h1 {
@@ -183,6 +173,44 @@ body>header h1 {
         writing-mode: inherit;
         transform: none;
     }
+}
+
+.menu-bar {
+    flex: 0;
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: space-evenly;
+    padding-inline: var(--margin-inline);
+    align-items: stretch;
+    align-content: stretch;
+}
+
+.menu-bar>* {
+    margin-inline: var(--margin-inline-thin);
+    margin-block: auto;
+    display: block;
+}
+
+.menu-bar>:has(>fieldset) {
+    flex: 1
+}
+
+.menu-bar fieldset {
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: space-around;
+    padding-inline: 0;
+    margin: 0
+}
+
+.menu-bar fieldset label {
+    display: inline-block;
+}
+
+#text-in,
+#text-out,
+#view-out {
+    flex: 1;
 }
 
 @media (max-width: 480px) {
