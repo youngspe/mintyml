@@ -515,9 +515,9 @@ fn get_multiline_text<'src, const ESCAPE: bool>(
     escape: bool,
 ) -> BuildResult<Node<'src>> {
     let value = if escape {
-        cx.slice(range)
-    } else {
         cx.escapable_slice(range)?
+    } else {
+        cx.slice(range)
     };
     Ok(Text {
         value,

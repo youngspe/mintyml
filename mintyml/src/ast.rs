@@ -148,7 +148,7 @@ gramma::define_token!(
     #[pattern(regex = r"(?s)<\[\[.*?\]\]>")]
     pub struct Verbatim0;
 
-    #[pattern(regex = r"(?s)<\[#\[.*?@\]#\]>")]
+    #[pattern(regex = r"(?s)<\[#\[.*?\]#\]>")]
     pub struct Verbatim1;
 
     #[pattern(regex = r"(?s)<\[##\[.*?\]##\]>")]
