@@ -41,7 +41,7 @@ gramma::define_token!(
         (?:
             [ \ \t ]* (?:
                 [^ \s \{ \} < > \\ ]
-                | \\ (?: . | u\{\w*\})
+                | \\ (?: u \{ .*? \} | . )
             )+
         )+?
     )
@@ -74,15 +74,16 @@ gramma::define_token!(
 
         # element, class, or id:
         | [ \. \# ]? (
-            [ : a-z A-Z 0-9 \- ] | \\.
+            [ : a-z A-Z 0-9 \- ]
+            | \\ (:? u \{ .*? \} | .)
         )+
 
         # attribute:
         | \[ (
             [^ \[ \] \\ " ' ]
-            | \\.
-            | "( [^ \\ " ] | \\. )*"
-            | '( [^ \\ ' ] | \\. )*'
+            | \\ (:? u \{ .*? \} | .)
+            | "( [^ \\ " ] | \\ (:? u \{ .*? \} | .) )*"
+            | '( [^ \\ ' ] | \\ (:? u \{ .*? \} | .) )*'
         )* \]
     )+"#)]
     pub struct SelectorString;
@@ -154,13 +155,13 @@ gramma::define_token!(
     #[pattern(regex = r"(?s)<\[##\[.*?\]##\]>")]
     pub struct Verbatim2;
 
-    #[pattern(regex = r#"(?ms)"""[ \t\r]*\n.*?^[ \t]*""""#)]
+    #[pattern(regex = r#"(?ms)"""(:?[^\n"].*)?\n.*?^[ \t]*""""#)]
     pub struct MultilineEscaped;
 
-    #[pattern(regex = r#"(?ms)'''[ \t\r]*\n.*?^[ \t]*'''"#)]
+    #[pattern(regex = r#"(?ms)'''(:?[^\n'].*)?\n.*?^[ \t]*'''"#)]
     pub struct MultilineUnescaped;
 
-    #[pattern(regex = r"(?ms)```[ \t\r]*\n.*?^[ \t]*```")]
+    #[pattern(regex = r"(?ms)```[^\n`]*\n.*?^[ \t]*```")]
     pub struct MultilineCode;
 );
 

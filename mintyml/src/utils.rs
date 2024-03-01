@@ -43,13 +43,22 @@ impl<'src> StrCursor<'src> {
     }
 
     pub fn advance_by(&mut self, num: usize) -> Result<&'src str, &'src str> {
-        match self.src.char_indices().take(num).enumerate().last() {
+        match self
+            .src
+            .get(self.position..)
+            .unwrap_or_default()
+            .char_indices()
+            .take(num)
+            .enumerate()
+            .last()
+        {
             Some((n, (i, ch))) => {
                 let len = i + ch.len_utf8();
                 let slice = self
                     .src
                     .get(self.position..self.position + len)
                     .unwrap_or("");
+                self.position += len;
                 if n == num - 1 {
                     Ok(slice)
                 } else {

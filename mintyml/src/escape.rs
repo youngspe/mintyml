@@ -54,6 +54,7 @@ pub fn unescape_parts<'src>(
                 if cursor.peek(0) != Some('{') {
                     break 'out Err(());
                 };
+                let _ = cursor.next();
 
                 let digits = match cursor.advance_to_char('}') {
                     Ok(digits) if (1..=6).contains(&digits.len()) => digits,
