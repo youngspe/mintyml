@@ -365,7 +365,7 @@ pub fn infer_elements<'src, 'data>(
     special_tags: &'data SpecialTagConfig<'src>,
 ) {
     match (InferContext::<'src, 'data, '_> {
-        ci: default(),
+        ci: get_inference("div", default(), ElementKind::Block),
         special_tags,
         element_kind: ElementKind::Block,
         is_first_element: true,

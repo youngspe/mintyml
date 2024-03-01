@@ -312,9 +312,9 @@ fn dl_infer_with_blocks() {
         concat!(
             r#"<dl>"#,
             r#"<dt>term1</dt>"#,
-            r#" <dd>details1</dd>"#,
+            r#" <dd><p>details1</p></dd>"#,
             r#" <dt>term2</dt>"#,
-            r#" <dd>details2</dd>"#,
+            r#" <dd><p>details2</p></dd>"#,
             r#"</dl>"#,
         )
     )
