@@ -1,0 +1,32 @@
+style>'''
+.report td {
+  text-align: right;
+}
+.report tbody td:is(:nth-child(1),:nth-child(2)) {
+  text-align: center;
+}
+'''
+
+table.report {
+    caption> Sales report
+
+    thead {
+      <(th[colspan=2]> Name)>
+      <(th[rowspan=2]> Sales)>
+      <(th[rowspan=2]> Expenses)>
+      <(th[rowspan=2]> Net Profit)>
+
+      <(th> First)> <(th> Last)>
+    }
+
+    <(John)> <(Smith)>
+    <(10.00)> <(5.00)> <(5.00)>
+
+    <(Alice)> <(Jones)>
+    <(15.00)> <(4.00)> <(11.00)>
+
+    <(Carol)> <(Green)>
+    <(20.00)> <(3.00)> <(17.00)>
+
+    tfoot { <(th[colspan=2]> Total)> <(45.00)> <(12.00)> <(33.00)> }
+}

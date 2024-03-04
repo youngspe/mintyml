@@ -10,10 +10,15 @@
 </head>
 
 <body>
-  <header>
-    <div class="page-content">
-      <h1>MinTyML Demo</h1>
-    </div>
+  <header class="tool-bar">
+    <h1>MinTyML Demo</h1>
+    <fieldset>
+      <label>
+        Example
+        <select id="example-select"></select>
+      </label>
+      <button type="button" id="reset-button">Reset</button>
+    </fieldset>
   </header>
   <main>
     <demo-container class="page-content">
@@ -23,21 +28,16 @@
             <summary>
               <h2>MinTyML Input</h2>
             </summary>
-            <menu class="menu-bar">
-              <li><fieldset>
-                <label>
-                  Select example
-                  <select id="example-select">
-                    <option>intro</option>
-                    <option>intro2</option>
-                  </select>
-                </label>
-                <button type="button">Reset</button>
-              </fieldset></li>
-              <li><footer>
-                <small>Editor powered by <a href="https://ace.c9.io/">Ace</a></small>
-              </footer></li>
-            </menu>
+            <div class="tool-bar" role="toolbar">
+
+              <fieldset>
+                <label>Wrap <input type="checkbox" name="wrap"></label>
+              </fieldset>
+              </li>
+              <div role="note" class="credit">
+                Editor powered by <a href="https://ace.c9.io/">Ace</a>
+              </div>
+            </div>
             <div id="text-in">
               <pre id="editor"></pre>
             </div>
