@@ -164,9 +164,17 @@ fn get_inference<'cx>(
             first_element: Some(ElementInference::all("title")),
             ..non_content(ci)
         },
-        "datalist" | "optgroup" | "select" => ContentInference {
+        "datalist" | "optgroup" => ContentInference {
             mode: ContentMode::Block,
             element: ElementInference::all("option"),
+            ..non_content(ci)
+        },
+        "select" => ContentInference {
+            mode: ContentMode::Block,
+            element: ElementInference {
+                block: "optgroup",
+                ..ElementInference::all("option")
+            },
             ..non_content(ci)
         },
         "table" | "tbody" | "thead" | "tfoot" => ContentInference {

@@ -47,7 +47,7 @@ pub fn unescape_parts<'src>(
             'x' => cursor
                 .advance_by(2)
                 .ok()
-                .and_then(|digits| u8::from_str_radix(digits, 16).ok())
+                .and_then(|digits| u8::from_str_radix(digits, 16).ok().filter(|&x| x <= 0x7f))
                 .map(char::from)
                 .ok_or(()),
             'u' => 'out: {
@@ -68,8 +68,8 @@ pub fn unescape_parts<'src>(
                     .and_then(char::from_u32)
                     .ok_or(())
             }
-            ch if ch.is_alphanumeric() => Err(()),
-            ch => Ok(ch),
+            ch @ ('<' | '>' | '{' | '}' | '"' | '\'' | '\\') => Ok(ch),
+            _ => Err(()),
         };
 
         Some(out.map(UnescapePart::Char).map_err(|()| EscapeError {

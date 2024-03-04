@@ -693,6 +693,7 @@ fn build_text_line_part<'src>(
                 ..default()
             }
             .into()),
+            ast::Node::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
             ast::Node::Paragraph { paragraph } => Ok(Element {
                 kind: ElementKind::Inline(None),
                 ..build_paragraph(cx, paragraph)?
@@ -750,6 +751,7 @@ fn build_element_body<'src>(
             }
             ast::Node::Element { element } => Ok(vec![build_element(cx, element)?.into()]),
             ast::Node::Paragraph { paragraph } => Ok(vec![build_paragraph(cx, paragraph)?.into()]),
+            ast::Node::Comment { comment } => Ok(vec![Node::Comment(cx.slice(comment.inner))]),
         },
     }
 }
@@ -790,6 +792,7 @@ fn nodes_from_ast<'src, 'ast>(
         ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
         ast::Node::Element { element } => build_element(cx, element).map(Node::from),
         ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
+        ast::Node::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
     });
     intersperse_with(nodes, || Ok(Space::ParagraphEnd.into())).collect()
 }

@@ -300,6 +300,7 @@ gramma::define_rule!(
     pub enum Node {
         MultilineCode { multiline: MultilineCode },
         Element { element: Element },
+        Comment { comment: Comment },
         Paragraph { paragraph: Paragraph },
     }
 

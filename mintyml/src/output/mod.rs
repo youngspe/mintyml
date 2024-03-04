@@ -402,6 +402,7 @@ where
                 self.out.write_str("<!--")?;
                 self.write_escape(s, false)?;
                 self.out.write_str("-->")?;
+                self.follows_space = false;
             }
             Node::Space(space) => {
                 self.space(*space)?;
