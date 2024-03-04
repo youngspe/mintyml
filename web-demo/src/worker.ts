@@ -9,7 +9,7 @@ self.onmessage = async function (e: MessageEvent<ConvertRequestMessage>) {
     converter ??= new (await mintyml).MintymlConverter({ indent: 2, completePage: true })
 
     try {
-        let output = converter.convert(e.data.input)
+        let output = await converter.convert(e.data.input)
         self.postMessage({ output } satisfies ConvertResponseMessage)
     } catch (error) {
         self.postMessage({ error: error as MintymlError } satisfies ConvertResponseMessage)

@@ -4,7 +4,9 @@
   "description": "",
   "main": "src-ts/index.js",
   "scripts": {
-    "build": "wasm-pack build && tsc"
+    "build": "wasm-pack build -d pkg-web -t bundler && wasm-pack build -d pkg-node -t nodejs && tsc",
+    "build-web": "wasm-pack build -d pkg-web -t bundler && tsc",
+    "build-node": "wasm-pack build -d pkg-node -t nodejs && tsc"
   },
   "author": "",
   "license": "MIT",

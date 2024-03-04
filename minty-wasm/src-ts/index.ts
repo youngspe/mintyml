@@ -1,4 +1,12 @@
-import * as _mintyml from '../pkg'
+declare function require(s: string): any
+
+let _mintyml: Promise<typeof import('../pkg-web')>
+
+if (globalThis.window || !eval(`typeof require === 'function'`)) {
+    _mintyml = require('../pkg-web')
+} else {
+    _mintyml = eval('require')('../pkg-node/minty_wasm.js')
+}
 
 export interface MintymlError {
     message: string
@@ -20,15 +28,16 @@ export class MintymlConverter {
     indent: number | null
     completePage: boolean
 
-    constructor(options: { xml?: boolean, indent?: number | null, completePage?: boolean }) {
+    constructor(options: { xml?: boolean, indent?: number | null, completePage?: boolean } = {}) {
         this.xml = options.xml ?? false
         this.indent = options.indent ?? null
         this.completePage = options.completePage ?? false
     }
 
-    convert(src: string): string {
+    async convert(src: string): Promise<string> {
+        const mintyml = await _mintyml
         try {
-            return _mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage)
+            return mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage)
         } catch (e) {
             const err = e as MintymlError
 
