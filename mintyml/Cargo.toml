@@ -1,7 +1,10 @@
 [package]
 name = "mintyml"
+description = "A minialist alternative syntax to HTML"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/youngspe/mintyml"
 
 [dependencies.thiserror]
 version = "1.0.57"
