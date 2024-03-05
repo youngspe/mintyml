@@ -1,14 +1,17 @@
 {
   "name": "mintyml",
   "version": "0.1.0",
-  "description": "",
-  "main": "src-ts/index.js",
+  "description": "An minimalist alternative syntax to HTML",
+  "main": "out-js/index.js",
+  "repository": {
+    "url": "https://github.com/youngspe/mintyml"
+  },
   "scripts": {
     "build": "wasm-pack build -d pkg-web -t bundler && wasm-pack build -d pkg-node -t nodejs && tsc",
     "build-web": "wasm-pack build -d pkg-web -t bundler && tsc",
     "build-node": "wasm-pack build -d pkg-node -t nodejs && tsc"
   },
-  "author": "",
+  "author": "Spencer Young",
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.3"

@@ -2,9 +2,20 @@ declare function require(s: string): any
 
 let _mintyml: Promise<typeof import('../pkg-web')>
 
-if (globalThis.window || !eval(`typeof require === 'function'`)) {
-    _mintyml = require('../pkg-web')
+// We need to know if we're running in a browser (bundled with e.g. WebPack)
+// or in node.js. If we're in a browser, we import from 'pkg-web' which imports the
+// .wasm file for webpack to bundle.
+// In node, we assume there's no bundler and import from 'pkg-node' which the loads the file via 'fs'
+const isBrowser = new Function(`
+    return this === this.window
+ || this === this.self
+ || typeof require !== 'function'
+`)()
+
+if (isBrowser) {
+    _mintyml = require('../pkg-web/minty_wasm.js')
 } else {
+    // Use eval so WebPack doesn't think it's a dependency
     _mintyml = eval('require')('../pkg-node/minty_wasm.js')
 }
 
