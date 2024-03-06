@@ -6,11 +6,11 @@ let _mintyml: Promise<typeof import('../pkg-web/minty_wasm.d.ts')>
 // or in node.js. If we're in a browser, we import from 'pkg-web' which imports the
 // .wasm file for webpack to bundle.
 // In node, we assume there's no bundler and import from 'pkg-node' which the loads the file via 'fs'
-const isBrowser = new Function(`
-    return this === this.window
+const isBrowser = eval(`
+    this === this.window
  || this === this.self
  || typeof require !== 'function'
-`)()
+`)
 
 if (isBrowser) {
     _mintyml = require('../pkg-web/minty_wasm.js')
