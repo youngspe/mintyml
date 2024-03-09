@@ -81,6 +81,7 @@ pub struct Text<'src> {
     pub value: Cow<'src, str>,
     pub escape: bool,
     pub multiline: bool,
+    pub raw: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -119,10 +120,12 @@ impl<'src> ToStatic for Node<'src> {
                 value,
                 escape,
                 multiline,
+                raw,
             }) => Node::Text(Text {
                 value: value.to_static(),
                 escape,
                 multiline,
+                raw,
             }),
             Node::Comment(x) => Node::Comment(x.to_static()),
             Node::Space(x) => Node::Space(x),
@@ -355,34 +358,6 @@ impl<'src> BuildContext<'src> {
             .map(|()| slice)
     }
 
-    fn collect<C, T, E>(&mut self, iter: impl IntoIterator<Item = Result<T, E>>) -> BuildResult<C>
-    where
-        C: FromIterator<T>,
-        E: Into<SyntaxError>,
-    {
-        let mut success = true;
-        let mut iter = iter.into_iter();
-
-        let item_iter = iter.by_ref().map_while(|r| match r {
-            Ok(x) => Some(x),
-            Err(e) => {
-                success = false;
-                self.errors.push(e.into());
-                None
-            }
-        });
-
-        let out = item_iter.collect();
-
-        if success {
-            Ok(out)
-        } else {
-            self.errors
-                .extend(iter.filter_map(Result::err).map(Into::into));
-            Err(default())
-        }
-    }
-
     fn record_errors<E: Into<SyntaxError>>(
         &mut self,
         iter: impl IntoIterator<Item = E>,
@@ -523,6 +498,7 @@ fn get_multiline_text<'src, const ESCAPE: bool>(
         value,
         escape,
         multiline: true,
+        ..default()
     }
     .into())
 }
@@ -577,17 +553,18 @@ fn build_verbatim_text<'src>(
     v: &ast::Verbatim,
     cx: &mut BuildContext<'src>,
 ) -> BuildResult<Node<'src>> {
-    let (mut range, trim) = match v {
-        ast::Verbatim::Verbatim0 { value, .. } => (value.range, 3),
-        ast::Verbatim::Verbatim1 { value, .. } => (value.range, 4),
-        ast::Verbatim::Verbatim2 { value, .. } => (value.range, 5),
+    let (mut range, trim_start, trim_end) = match &v.tail {
+        ast::VerbatimTail::Verbatim0 { value, .. } => (value.range, 1, 3),
+        ast::VerbatimTail::Verbatim1 { value, .. } => (value.range, 2, 4),
+        ast::VerbatimTail::Verbatim2 { value, .. } => (value.range, 3, 5),
     };
 
-    range.start += trim;
-    range.end -= trim;
+    range.start += trim_start;
+    range.end -= trim_end;
 
     Ok(Text {
         value: cx.slice(range),
+        raw: v.raw.is_some(),
         ..default()
     }
     .into())
@@ -662,7 +639,7 @@ fn build_text_line_part<'src>(
 ) -> Result<Node<'src>, BuildError> {
     use ast::TextLinePart::*;
     match part {
-        Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
+        NonParagraph { node } => build_non_paragraph_node(cx, node),
         TextSegment { text } => Ok(Text {
             value: cx.escapable_slice(text.range)?,
             escape: true,
@@ -674,6 +651,7 @@ fn build_text_line_part<'src>(
                 inner: Some(node), ..
             },
         } => match &**node {
+            ast::Node::NonParagraph { node } => build_non_paragraph_node(cx, &node),
             ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
             ast::Node::Element {
                 element: ast::Element::WithSelector { selector, body },
@@ -693,7 +671,6 @@ fn build_text_line_part<'src>(
                 ..default()
             }
             .into()),
-            ast::Node::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
             ast::Node::Paragraph { paragraph } => Ok(Element {
                 kind: ElementKind::Inline(None),
                 ..build_paragraph(cx, paragraph)?
@@ -708,7 +685,6 @@ fn build_text_line_part<'src>(
         }
         .into()),
         InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
-        Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
     }
 }
 
@@ -746,12 +722,12 @@ fn build_element_body<'src>(
         ast::ElementBody::Line {
             body: Some(body), ..
         } => match &**body {
+            ast::Node::NonParagraph { node } => Ok(vec![build_non_paragraph_node(cx, node)?]),
             ast::Node::MultilineCode { multiline } => {
                 Ok(vec![build_multiline_code(cx, multiline)?])
             }
             ast::Node::Element { element } => Ok(vec![build_element(cx, element)?.into()]),
             ast::Node::Paragraph { paragraph } => Ok(vec![build_paragraph(cx, paragraph)?.into()]),
-            ast::Node::Comment { comment } => Ok(vec![Node::Comment(cx.slice(comment.inner))]),
         },
     }
 }
@@ -784,15 +760,25 @@ fn get_default_kind(body: &ast::ElementBody) -> ElementKind {
     }
 }
 
+fn build_non_paragraph_node<'src>(
+    cx: &mut BuildContext<'src>,
+    node: &ast::NonParagraphNode,
+) -> BuildResult<Node<'src>> {
+    match node {
+        ast::NonParagraphNode::Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
+        ast::NonParagraphNode::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+    }
+}
+
 fn nodes_from_ast<'src, 'ast>(
     cx: &mut BuildContext<'src>,
     ast: impl IntoIterator<Item = &'ast ast::Node>,
 ) -> BuildResult<Vec<Node<'src>>> {
     let nodes = ast.into_iter().map(|node| match node {
+        ast::Node::NonParagraph { node } => build_non_paragraph_node(cx, node),
         ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
         ast::Node::Element { element } => build_element(cx, element).map(Node::from),
         ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
-        ast::Node::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
     });
     intersperse_with(nodes, || Ok(Space::ParagraphEnd.into())).collect()
 }

@@ -34,7 +34,6 @@ struct OutputContext<'cx, Out> {
     string_buf: String,
     out: &'cx mut Out,
     config: OutputConfig<'cx>,
-    mode: ContentMode,
     indent_level: u32,
     element: &'cx Element<'cx>,
     follows_space: bool,
@@ -377,7 +376,7 @@ where
             Node::Text(text) if text.value.is_empty() => {}
             Node::Text(text) => {
                 let escape = text.escape;
-                let is_raw = self.element.is_raw;
+                let is_raw = text.raw || self.element.is_raw;
                 let mut write = |value| match (escape, is_raw) {
                     (true, true) => self.write_unescape(value),
                     (true, false) => self.write_escape_unescape(value, false),
@@ -439,7 +438,6 @@ pub fn output_html_to(
         config,
         indent_level: 0,
         element: &default(),
-        mode: ContentMode::Block,
         follows_space: true,
     };
 

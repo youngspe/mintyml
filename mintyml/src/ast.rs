@@ -36,7 +36,8 @@ gramma::define_token!(
     )+")]
     pub struct Ident;
 
-    #[pattern(regex = r#"(?xm)
+    #[pattern(
+        regex = r#"(?xm)
     (
         (?:
             [ \ \t ]* (?:
@@ -50,7 +51,9 @@ gramma::define_token!(
         | [ \) " ' ` \? ! : % ]>
         | [ \{ \} < ]
         | $
-    )"#, capture = 1)]
+    )"#,
+        capture = 1
+    )]
     pub struct TextSegment;
 
     #[pattern(regex = r#"(?xms)
@@ -146,14 +149,20 @@ gramma::define_token!(
     #[pattern(regex = r"(?s)<`.*?`>")]
     pub struct InlineCode;
 
-    #[pattern(regex = r"(?s)<\[\[.*?\]\]>")]
-    pub struct Verbatim0;
+    #[pattern(exact = r"<[")]
+    pub struct VerbatimOpen;
 
-    #[pattern(regex = r"(?s)<\[#\[.*?\]#\]>")]
-    pub struct Verbatim1;
+    #[pattern(exact = "raw")]
+    pub struct KeywordRaw;
 
-    #[pattern(regex = r"(?s)<\[##\[.*?\]##\]>")]
-    pub struct Verbatim2;
+    #[pattern(regex = r"(?s)\[.*?\]\]>")]
+    pub struct VerbatimTail0;
+
+    #[pattern(regex = r"(?s)#\[.*?\]#\]>")]
+    pub struct VerbatimTail1;
+
+    #[pattern(regex = r"(?s)##\[.*?\]##\]>")]
+    pub struct VerbatimTail2;
 
     #[pattern(regex = r#"(?ms)"""(:?[^\n"].*)?\n.*?^[ \t]*""""#)]
     pub struct MultilineEscaped;
@@ -183,24 +192,27 @@ gramma::define_rule!(
         TextSegment {
             text: TextSegment,
         },
-        Verbatim {
-            verbatim: Verbatim,
-        },
         InlineSpecial {
             inline_special: InlineSpecial,
         },
         Inline {
             inline: Inline,
         },
-        Comment {
-            comment: Comment,
+        NonParagraph {
+            node: NonParagraphNode,
         },
     }
 
-    pub enum Verbatim {
-        Verbatim0 { value: Verbatim0 },
-        Verbatim1 { value: Verbatim1 },
-        Verbatim2 { value: Verbatim2 },
+    pub struct Verbatim {
+        pub open: VerbatimOpen,
+        pub raw: Option<KeywordRaw>,
+        pub tail: VerbatimTail,
+    }
+
+    pub enum VerbatimTail {
+        Verbatim0 { value: VerbatimTail0 },
+        Verbatim1 { value: VerbatimTail1 },
+        Verbatim2 { value: VerbatimTail2 },
     }
 
     pub enum Multiline {
@@ -297,10 +309,15 @@ gramma::define_rule!(
         },
     }
 
+    pub enum NonParagraphNode {
+        Verbatim { verbatim: Verbatim },
+        Comment { comment: Comment },
+    }
+
     pub enum Node {
+        NonParagraph { node: NonParagraphNode },
         MultilineCode { multiline: MultilineCode },
         Element { element: Element },
-        Comment { comment: Comment },
         Paragraph { paragraph: Paragraph },
     }
 

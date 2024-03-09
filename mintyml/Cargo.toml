@@ -2,7 +2,7 @@
 name = "mintyml"
 description = "A minialist alternative syntax to HTML"
 license = "MIT"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 repository = "https://github.com/youngspe/mintyml"
 
