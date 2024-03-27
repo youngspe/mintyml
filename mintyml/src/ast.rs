@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use gramma::parse::LocationRange;
+use gramma::parse::{Location, LocationRange};
 
 gramma::define_token!(
     #[pattern(exact = ">")]
@@ -278,8 +278,7 @@ gramma::define_rule!(
 
     pub struct Paragraph {
         pub line1: ParagraphItem,
-        #[transform(for_each<discard_before<NewLine>>)]
-        pub lines: Vec<ParagraphItem>,
+        pub lines: Vec<(NewLine, ParagraphItem)>,
     }
 
     pub enum ElementBody {
@@ -309,12 +308,24 @@ gramma::define_rule!(
         },
     }
 
-    pub enum NonParagraphNode {
+    pub struct NonParagraphNode {
+        pub start: Location,
+        pub node_type: NonParagraphNodeType,
+        pub end: Location,
+    }
+
+    pub enum NonParagraphNodeType {
         Verbatim { verbatim: Verbatim },
         Comment { comment: Comment },
     }
 
-    pub enum Node {
+    pub struct Node {
+        pub start: Location,
+        pub node_type: NodeType,
+        pub end: Location,
+    }
+
+    pub enum NodeType {
         NonParagraph { node: NonParagraphNode },
         MultilineCode { multiline: MultilineCode },
         Element { element: Element },
@@ -380,7 +391,9 @@ gramma::define_rule!(
 
     #[transform(ignore_around<Whitespace>)]
     pub struct Document {
+        pub start: Location,
         pub nodes: Option<Nodes>,
+        pub end: Location,
     }
 );
 

@@ -8,7 +8,7 @@ use core::{
 use alloc::string::String;
 
 use crate::{
-    document::{ContentMode, Document, Element, Node, Selector, SelectorElement, Space},
+    document::{ContentMode, Document, Element, Node, NodeType, Selector, SelectorElement, Space},
     escape::{unescape_parts, UnescapePart},
     utils::{default, to_lowercase},
     OutputConfig,
@@ -371,10 +371,10 @@ where
     }
 
     fn process_node(&mut self, node: &'cx Node<'cx>) -> OutputResult {
-        let out = match node {
-            Node::Element(e) => self.process_element(e)?,
-            Node::Text(text) if text.value.is_empty() => {}
-            Node::Text(text) => {
+        let out = match &node.node_type {
+            NodeType::Element(e) => self.process_element(e)?,
+            NodeType::Text(text) if text.value.is_empty() => {}
+            NodeType::Text(text) => {
                 let escape = text.escape;
                 let is_raw = text.raw || self.element.is_raw;
                 let mut write = |value| match (escape, is_raw) {
@@ -397,13 +397,13 @@ where
 
                 self.follows_space = last_line.ends_with([' ', '\t']);
             }
-            Node::Comment(s) => {
+            NodeType::Comment(s) => {
                 self.out.write_str("<!--")?;
                 self.write_escape(s, false)?;
                 self.out.write_str("-->")?;
                 self.follows_space = false;
             }
-            Node::Space(space) => {
+            NodeType::Space(space) => {
                 self.space(*space)?;
                 self.follows_space = true
             }

@@ -55,7 +55,9 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Document<'src> {
+    pub range: LocationRange,
     pub nodes: Vec<Node<'src>>,
 }
 
@@ -63,12 +65,14 @@ impl<'src> ToStatic for Document<'src> {
     type Static = Document<'static>;
     fn to_static(self) -> Self::Static {
         Document {
+            range: self.range,
             nodes: self.nodes.to_static(),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Space {
     Inline,
     LineEnd,
@@ -85,50 +89,69 @@ pub struct Text<'src> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Node<'src> {
+#[non_exhaustive]
+pub struct Node<'src> {
+    pub range: LocationRange,
+    pub node_type: NodeType<'src>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum NodeType<'src> {
     Element(Element<'src>),
     Text(Text<'src>),
     Comment(Cow<'src, str>),
     Space(Space),
 }
 
-impl<'src> From<Text<'src>> for Node<'src> {
+impl<'src> From<Text<'src>> for NodeType<'src> {
     fn from(v: Text<'src>) -> Self {
         Self::Text(v)
     }
 }
 
-impl<'src> From<Space> for Node<'src> {
+impl<'src> From<Space> for NodeType<'src> {
     fn from(v: Space) -> Self {
         Self::Space(v)
     }
 }
 
-impl<'src> From<Element<'src>> for Node<'src> {
+impl<'src> From<Element<'src>> for NodeType<'src> {
     fn from(v: Element<'src>) -> Self {
         Self::Element(v)
     }
 }
 
-impl<'src> ToStatic for Node<'src> {
+impl ToStatic for Node<'_> {
     type Static = Node<'static>;
 
     fn to_static(self) -> Self::Static {
+        Node {
+            range: self.range,
+            node_type: self.node_type.to_static(),
+        }
+    }
+}
+
+impl<'src> ToStatic for NodeType<'src> {
+    type Static = NodeType<'static>;
+
+    fn to_static(self) -> Self::Static {
         match self {
-            Node::Element(x) => Node::Element(x.to_static()),
-            Node::Text(Text {
+            NodeType::Element(x) => NodeType::Element(x.to_static()),
+            NodeType::Text(Text {
                 value,
                 escape,
                 multiline,
                 raw,
-            }) => Node::Text(Text {
+            }) => NodeType::Text(Text {
                 value: value.to_static(),
                 escape,
                 multiline,
                 raw,
             }),
-            Node::Comment(x) => Node::Comment(x.to_static()),
-            Node::Space(x) => Node::Space(x),
+            NodeType::Comment(x) => NodeType::Comment(x.to_static()),
+            NodeType::Space(x) => NodeType::Space(x),
         }
     }
 }
@@ -174,6 +197,7 @@ impl<'src> ToStatic for Element<'src> {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Selector<'src> {
     pub element: SelectorElement<'src>,
     pub class_names: Vec<Cow<'src, str>>,
@@ -205,6 +229,7 @@ impl<'src> From<SelectorElement<'src>> for Selector<'src> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Attribute<'src> {
     pub name: Cow<'src, str>,
     pub value: Option<Cow<'src, str>>,
@@ -242,6 +267,7 @@ impl<'src> ToStatic for SelectorElement<'src> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum ElementDelimiter {
     Line,
     LineBlock,
@@ -249,6 +275,7 @@ pub enum ElementDelimiter {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum ElementKind {
     Line,
     LineBlock,
@@ -259,6 +286,7 @@ pub enum ElementKind {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 struct BuildError {}
 
 #[non_exhaustive]
@@ -383,6 +411,10 @@ type BuildResult<T> = Result<T, BuildError>;
 impl<'src> Document<'src> {
     fn build_from_ast(cx: &mut BuildContext<'src>, ast: &ast::Document) -> BuildResult<Self> {
         Ok(Document {
+            range: LocationRange {
+                start: ast.start,
+                end: ast.end,
+            },
             nodes: nodes_from_ast(
                 cx,
                 ast.nodes
@@ -474,7 +506,12 @@ fn build_text_line<'src>(
 
     let nodes = first.chain(rest).flat_map(|(space, part)| {
         [
-            space.as_ref().map(|_| Ok(Space::Inline.into())),
+            space.as_ref().map(|space| {
+                Ok(Node {
+                    range: space.range,
+                    node_type: Space::Inline.into(),
+                })
+            }),
             Some(build_text_line_part(part, cx)),
         ]
         .into_iter()
@@ -494,13 +531,16 @@ fn get_multiline_text<'src, const ESCAPE: bool>(
     } else {
         cx.slice(range)
     };
-    Ok(Text {
-        value,
-        escape,
-        multiline: true,
-        ..default()
-    }
-    .into())
+    Ok(Node {
+        range,
+        node_type: Text {
+            value,
+            escape,
+            multiline: true,
+            ..default()
+        }
+        .into(),
+    })
 }
 
 fn build_multiline<'src>(
@@ -516,7 +556,7 @@ fn build_multiline<'src>(
 fn build_multiline_code<'src>(
     cx: &mut BuildContext<'src>,
     multiline: &ast::MultilineCode,
-) -> BuildResult<Node<'src>> {
+) -> BuildResult<NodeType<'src>> {
     let inner = get_multiline_text::<false>(cx, multiline.range, false)?;
 
     let code = Element {
@@ -529,7 +569,10 @@ fn build_multiline_code<'src>(
     let pre = Element {
         kind: ElementKind::Block,
         selector: SelectorElement::Special(SpecialKind::CodeBlockContainer).into(),
-        nodes: vec![code.into()],
+        nodes: vec![Node {
+            range: multiline.range,
+            node_type: code.into(),
+        }],
         ..default()
     };
 
@@ -552,7 +595,7 @@ fn build_paragraph_item<'src>(
 fn build_verbatim_text<'src>(
     v: &ast::Verbatim,
     cx: &mut BuildContext<'src>,
-) -> BuildResult<Node<'src>> {
+) -> BuildResult<NodeType<'src>> {
     let (mut range, trim_start, trim_end) = match &v.tail {
         ast::VerbatimTail::Verbatim0 { value, .. } => (value.range, 1, 3),
         ast::VerbatimTail::Verbatim1 { value, .. } => (value.range, 2, 4),
@@ -606,13 +649,27 @@ fn build_inline_special<'src>(
             let mut range = code.range;
             range.start += 2;
             range.end -= 2;
-            vec![Text {
-                value: cx.slice(range),
-                ..default()
-            }
-            .into()]
+            vec![Node {
+                range: code.range,
+                node_type: Text {
+                    value: cx.slice(range),
+                    ..default()
+                }
+                .into(),
+            }]
         }
     };
+    let (open, close) = match special {
+        Emphasis { open, close, .. } => (open.range, close.range),
+        Strong { open, close, .. } => (open.range, close.range),
+        Underline { open, close, .. } => (open.range, close.range),
+        Strike { open, close, .. } => (open.range, close.range),
+        Quote { open, close, .. } => (open.range, close.range),
+        Code { code } => (code.range, code.range),
+    };
+
+    let range = open.combine(close);
+
     Ok(Element {
         selector: Selector {
             element: SelectorElement::Special(kind),
@@ -622,7 +679,8 @@ fn build_inline_special<'src>(
         kind: ElementKind::Inline(None),
         ..default()
     })
-    .map(Node::Element)
+    .map(NodeType::Element)
+    .map(|node_type| Node { range, node_type })
 }
 
 fn get_delimiter(body: &ast::ElementBody) -> ElementDelimiter {
@@ -639,51 +697,77 @@ fn build_text_line_part<'src>(
 ) -> Result<Node<'src>, BuildError> {
     use ast::TextLinePart::*;
     match part {
-        NonParagraph { node } => build_non_paragraph_node(cx, node),
-        TextSegment { text } => Ok(Text {
-            value: cx.escapable_slice(text.range)?,
-            escape: true,
-            ..default()
-        }
-        .into()),
+        NonParagraph { node } => Ok(Node {
+            range: LocationRange {
+                start: node.start,
+                end: node.end,
+            },
+            node_type: build_non_paragraph_node(cx, &node.node_type)?,
+        }),
+        TextSegment { text } => Ok(Node {
+            range: text.range,
+            node_type: Text {
+                value: cx.escapable_slice(text.range)?,
+                escape: true,
+                ..default()
+            }
+            .into(),
+        }),
         Inline {
             inline: ast::Inline {
                 inner: Some(node), ..
             },
-        } => match &**node {
-            ast::Node::NonParagraph { node } => build_non_paragraph_node(cx, &node),
-            ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
-            ast::Node::Element {
-                element: ast::Element::WithSelector { selector, body },
-            } => Ok(Element {
-                selector: Selector::build_from_ast(cx, selector)?,
-                nodes: build_element_body(cx, body)?,
-                kind: ElementKind::Inline(Some(get_delimiter(body))),
-                ..default()
-            }
-            .into()),
-            ast::Node::Element {
-                element: ast::Element::Body { body },
-            } => Ok(Element {
-                selector: default(),
-                nodes: build_element_body(cx, body)?,
-                kind: ElementKind::Inline(Some(get_delimiter(body))),
-                ..default()
-            }
-            .into()),
-            ast::Node::Paragraph { paragraph } => Ok(Element {
-                kind: ElementKind::Inline(None),
-                ..build_paragraph(cx, paragraph)?
-            }
-            .into()),
-        },
+        } => Ok(Node {
+            range: LocationRange {
+                start: node.start,
+                end: node.end,
+            },
+            node_type: match &node.node_type {
+                ast::NodeType::NonParagraph { node } => {
+                    build_non_paragraph_node(cx, &node.node_type)?
+                }
+                ast::NodeType::MultilineCode { multiline } => build_multiline_code(cx, multiline)?,
+                ast::NodeType::Element {
+                    element: ast::Element::WithSelector { selector, body },
+                } => Element {
+                    selector: Selector::build_from_ast(cx, selector)?,
+                    nodes: build_element_body(cx, body)?,
+                    kind: ElementKind::Inline(Some(get_delimiter(body))),
+                    ..default()
+                }
+                .into(),
+                ast::NodeType::Element {
+                    element: ast::Element::Body { body },
+                } => Element {
+                    selector: default(),
+                    nodes: build_element_body(cx, body)?,
+                    kind: ElementKind::Inline(Some(get_delimiter(body))),
+                    ..default()
+                }
+                .into(),
+                ast::NodeType::Paragraph { paragraph } => Element {
+                    kind: ElementKind::Inline(None),
+                    ..build_paragraph(cx, paragraph)?
+                }
+                .into(),
+            },
+        }),
         Inline {
-            inline: ast::Inline { inner: None, .. },
-        } => Ok(Element {
-            kind: ElementKind::Inline(None),
-            ..default()
-        }
-        .into()),
+            inline:
+                ast::Inline {
+                    inner: None,
+                    open,
+                    close,
+                    ..
+                },
+        } => Ok(Node {
+            range: open.range.combine(close.range),
+            node_type: Element {
+                kind: ElementKind::Inline(None),
+                ..default()
+            }
+            .into(),
+        }),
         InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
     }
 }
@@ -695,8 +779,11 @@ fn build_paragraph<'src>(
     let mut nodes = Vec::new();
     build_paragraph_item(cx, &paragraph.line1, &mut nodes)?;
 
-    for line in &paragraph.lines {
-        nodes.push(Node::Space(Space::LineEnd));
+    for (space, line) in &paragraph.lines {
+        nodes.push(Node {
+            range: space.range,
+            node_type: NodeType::Space(Space::LineEnd),
+        });
         build_paragraph_item(cx, line, &mut nodes)?;
     }
 
@@ -721,14 +808,20 @@ fn build_element_body<'src>(
         ast::ElementBody::Line { body: None, .. } => Ok(default()),
         ast::ElementBody::Line {
             body: Some(body), ..
-        } => match &**body {
-            ast::Node::NonParagraph { node } => Ok(vec![build_non_paragraph_node(cx, node)?]),
-            ast::Node::MultilineCode { multiline } => {
-                Ok(vec![build_multiline_code(cx, multiline)?])
-            }
-            ast::Node::Element { element } => Ok(vec![build_element(cx, element)?.into()]),
-            ast::Node::Paragraph { paragraph } => Ok(vec![build_paragraph(cx, paragraph)?.into()]),
-        },
+        } => Ok(vec![Node {
+            range: LocationRange {
+                start: body.start,
+                end: body.end,
+            },
+            node_type: match &body.node_type {
+                ast::NodeType::NonParagraph { node } => {
+                    build_non_paragraph_node(cx, &node.node_type)?
+                }
+                ast::NodeType::MultilineCode { multiline } => build_multiline_code(cx, multiline)?,
+                ast::NodeType::Element { element } => build_element(cx, element)?.into(),
+                ast::NodeType::Paragraph { paragraph } => build_paragraph(cx, paragraph)?.into(),
+            },
+        }]),
     }
 }
 
@@ -762,11 +855,13 @@ fn get_default_kind(body: &ast::ElementBody) -> ElementKind {
 
 fn build_non_paragraph_node<'src>(
     cx: &mut BuildContext<'src>,
-    node: &ast::NonParagraphNode,
-) -> BuildResult<Node<'src>> {
-    match node {
-        ast::NonParagraphNode::Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
-        ast::NonParagraphNode::Comment { comment } => Ok(Node::Comment(cx.slice(comment.inner))),
+    node_type: &ast::NonParagraphNodeType,
+) -> BuildResult<NodeType<'src>> {
+    match node_type {
+        ast::NonParagraphNodeType::Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
+        ast::NonParagraphNodeType::Comment { comment } => {
+            Ok(NodeType::Comment(cx.slice(comment.inner)))
+        }
     }
 }
 
@@ -774,13 +869,32 @@ fn nodes_from_ast<'src, 'ast>(
     cx: &mut BuildContext<'src>,
     ast: impl IntoIterator<Item = &'ast ast::Node>,
 ) -> BuildResult<Vec<Node<'src>>> {
-    let nodes = ast.into_iter().map(|node| match node {
-        ast::Node::NonParagraph { node } => build_non_paragraph_node(cx, node),
-        ast::Node::MultilineCode { multiline } => build_multiline_code(cx, multiline),
-        ast::Node::Element { element } => build_element(cx, element).map(Node::from),
-        ast::Node::Paragraph { paragraph } => build_paragraph(cx, paragraph).map(Node::from),
+    let nodes = ast.into_iter().map(|node| {
+        Ok(Node {
+            range: LocationRange {
+                start: node.start,
+                end: node.end,
+            },
+            node_type: match &node.node_type {
+                ast::NodeType::NonParagraph { node } => {
+                    build_non_paragraph_node(cx, &node.node_type)?
+                }
+                ast::NodeType::MultilineCode { multiline } => build_multiline_code(cx, multiline)?,
+                ast::NodeType::Element { element } => build_element(cx, element)?.into(),
+                ast::NodeType::Paragraph { paragraph } => build_paragraph(cx, paragraph)?.into(),
+            },
+        })
     });
-    intersperse_with(nodes, || Ok(Space::ParagraphEnd.into())).collect()
+    intersperse_with(nodes, |pre, post| {
+        Ok(Node {
+            range: LocationRange {
+                start: pre.as_ref().map_err(|_| default())?.range.end,
+                end: post.as_ref().map_err(|_| default())?.range.start,
+            },
+            node_type: Space::ParagraphEnd.into(),
+        })
+    })
+    .collect()
 }
 
 #[test]

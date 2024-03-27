@@ -4,8 +4,8 @@ use alloc::{borrow::Cow, string::String};
 
 use crate::{
     document::{
-        ContentMode, Document, Element, ElementDelimiter, ElementKind, Node, SelectorElement,
-        SpecialKind,
+        ContentMode, Document, Element, ElementDelimiter, ElementKind, Node, NodeType,
+        SelectorElement, SpecialKind,
     },
     utils::{default, to_lowercase},
     SpecialTagConfig,
@@ -265,16 +265,24 @@ fn get_effective_kind(element: &Element) -> ElementKind {
     fn inner(mut element: &Element, orig_kind: ElementKind) -> ElementKind {
         loop {
             match *element.nodes {
-                [Node::Element(Element {
-                    kind: kind @ ElementKind::Block,
+                [Node {
+                    node_type:
+                        NodeType::Element(Element {
+                            kind: kind @ ElementKind::Block,
+                            ..
+                        }),
                     ..
-                })] => return kind,
-                [Node::Element(
-                    ref e @ Element {
-                        kind: ElementKind::Line,
-                        ..
-                    },
-                )] => {
+                }] => return kind,
+                [Node {
+                    node_type:
+                        NodeType::Element(
+                            ref e @ Element {
+                                kind: ElementKind::Line,
+                                ..
+                            },
+                        ),
+                    ..
+                }] => {
                     element = e;
                 }
                 _ => return orig_kind,
@@ -293,8 +301,8 @@ fn get_effective_kind(element: &Element) -> ElementKind {
 
 impl<'src, 'data, 'buf> InferContext<'src, 'data, 'buf> {
     pub fn process_node(&mut self, node: &mut Node<'src>) {
-        match node {
-            Node::Element(e) => self.process_element(e),
+        match &mut node.node_type {
+            NodeType::Element(e) => self.process_element(e),
             _ => {}
         }
     }

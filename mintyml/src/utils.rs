@@ -1,5 +1,6 @@
 use alloc::{borrow::ToOwned, string::String};
-use core::{fmt, iter};
+use core::fmt;
+use either::Either;
 
 pub fn default<T: Default>() -> T {
     T::default()
@@ -147,16 +148,38 @@ pub fn join_display<T: fmt::Display>(
     join_fmt(src, |x, f| fmt::Display::fmt(&x, f), sep)
 }
 
+fn map_with_next<'iter, T, U>(
+    iter: impl IntoIterator<Item = T> + 'iter,
+    mut f: impl FnMut(T, Option<&mut T>) -> U + 'iter,
+) -> impl Iterator<Item = U> {
+    let mut iter = iter.into_iter();
+    iter.next()
+        .map(|first| {
+            let mut current = Some(first);
+            iter.map(Some).chain([None]).map(move |mut next| {
+                let out = f(current.take().unwrap(), next.as_mut());
+                current = next;
+                out
+            })
+        })
+        .into_iter()
+        .flatten()
+}
+
 pub fn intersperse_with<T>(
     iter: impl IntoIterator<Item = T>,
-    f: impl FnMut() -> T,
+    mut f: impl for<'t> FnMut(&'t mut T, &'t mut T) -> T,
 ) -> impl Iterator<Item = T> {
-    let mut iter = iter.into_iter();
-    let first = iter.next();
-
-    first
+    map_with_next(iter, move |mut current, next| {
+        if let Some(next) = next {
+            let item = f(&mut current, next);
+            Either::Left([current, item])
+        } else {
+            Either::Right([current])
+        }
         .into_iter()
-        .chain(iter::zip(iter::repeat_with(f), iter).flat_map(|(item1, item2)| [item1, item2]))
+    })
+    .flatten()
 }
 
 pub fn try_extend<T, E>(

@@ -1,5 +1,6 @@
 use alloc::vec;
 use core::mem;
+use gramma::parse::LocationRange;
 
 use crate::{
     document::{Attribute, Document, Element, Node, Selector, SelectorElement, Space},
@@ -17,8 +18,8 @@ where
     I::Item: AsRef<str>,
 {
     let tags = tags.into_iter();
-    match node {
-        crate::document::Node::Element(e) => match e {
+    match &mut node.node_type {
+        crate::document::NodeType::Element(e) => match e {
             Element {
                 selector:
                     Selector {
@@ -99,8 +100,30 @@ pub fn complete_page<'src>(doc: &mut Document<'src>, config: &OutputConfig<'src>
             })
             .collect();
 
-        root.nodes = vec![head.into(), Node::Space(Space::ParagraphEnd), body.into()];
+        let body_range = body
+            .nodes
+            .first()
+            .zip(body.nodes.last())
+            .map_or(doc.range, |(first, last)| first.range.combine(last.range));
+
+        root.nodes = vec![
+            Node {
+                range: LocationRange::INVALID,
+                node_type: head.into(),
+            },
+            Node {
+                range: LocationRange::INVALID,
+                node_type: Space::ParagraphEnd.into(),
+            },
+            Node {
+                range: body_range,
+                node_type: body.into(),
+            },
+        ];
     }
 
-    doc.nodes = vec![root.into()];
+    doc.nodes = vec![Node {
+        range: doc.range,
+        node_type: root.into(),
+    }];
 }
