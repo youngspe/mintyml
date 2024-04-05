@@ -4,13 +4,13 @@ on:
   push:
     branches: [ "main" ]
     paths-ignore:
-      - ./github
-      - ./web-demo
+      - github/**
+      - web-demo/**
   pull_request:
     branches: [ "main" ]
     paths-ignore:
-      - ./github
-      - ./web-demo
+      - github/**
+      - web-demo/**
   workflow_dispatch:
 
 env:

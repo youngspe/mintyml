@@ -3,12 +3,12 @@ name: Deploy MinTyML web demo
 on:
   push:
     branches: [ "main" ]
-    paths: 
-      - ./web-demo
-      - ./mintyml
-      - ./minty-wasm
+    paths:
+      - web-demo/**
+      - mintyml/**
+      - minty-wasm/**
   workflow_dispatch:
-    
+
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -25,10 +25,10 @@ concurrency:
 jobs:
   build-pages:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
@@ -47,15 +47,16 @@ jobs:
       working-directory: web-demo
       run: |
         export WEB_DEMO_BASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
+        echo "::notice title=WEB_DEMO_BASE_URL::$WEB_DEMO_BASE_URL"
         npm install
         npm run build
-    
+
     - name: Fix permissions
       run: |
         chmod -c -R +rX "web-demo/dist/" | while read line; do
           echo "::warning title=Invalid file permissions automatically fixed::$line"
         done
-  
+
     - name: Upload GitHub Pages artifact
       uses: actions/upload-pages-artifact@v3
       with:
