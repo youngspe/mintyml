@@ -80,23 +80,26 @@ article[lang=en-US] {
 
   h3> Paragraph
 
-  aside>figure {
-    ```
-    Lorem ipsum dolor sit amet,
-    consectetur adipiscing elit.
-
-    Sed do eiusmod tempor incididunt
-    ut labore et dolore magna aliqua.
-    ```
-    hr>
-    section.box>.result {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      > ```
       Lorem ipsum dolor sit amet,
       consectetur adipiscing elit.
 
       Sed do eiusmod tempor incididunt
       ut labore et dolore magna aliqua.
+      ```
+
+      {
+        Lorem ipsum dolor sit amet,
+        consectetur adipiscing elit.
+
+        Sed do eiusmod tempor incididunt
+        ut labore et dolore magna aliqua.
+      }
     }
-    figcaption> Paragraphs separated by empty lines.
+    caption> Paragraphs separated by empty lines.
   }
 
   The simplest node is the <(i> paragraph)>.
@@ -181,19 +184,21 @@ article[lang=en-US] {
   Elements are components of a document that have a distinct purpose
   and translate directly to an HTML element.
 
-  aside>figure {
-    ```
-    This is
-    a paragraph.
-    footer> This footer is outside the paragraph.
-    ```
-    hr>
-    section.box>.result {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      > ```
       This is
       a paragraph.
       footer> This footer is outside the paragraph.
+      ```
+      {
+        This is
+        a paragraph.
+        footer> This footer is outside the paragraph.
+      }
     }
-    figcaption> If an element directly follows a paragraph, the paragraph ends and does not include the element.
+    caption> If an element directly follows a paragraph, the paragraph ends and does not include the element.
   }
 
   Some common element types (or <(i> tag names)>)
@@ -288,19 +293,22 @@ article[lang=en-US] {
   A <(i> line element)> consists of an optional selector followed by <`>`> and optionally another node
   (for example a paragraph or element).
 
-  aside>figure {
-    ```
-    footer> This text is the content of the footer.
-    Here's another sentence in the footer.
-    ```
-
-    hr>
-
-    section.box>.result {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      >```
       footer> This text is the content of the footer.
       Here's another sentence in the footer.
+
+      This sentence is not part of the footer.
+      ```
+
+      {
+        footer> This text is the content of the footer.
+        Here's another sentence in the footer.
+      }
     }
-    figcaption> A line element containing text can span multiple lines
+    caption> A line element containing text can span multiple lines
   }
 
   Line elements are generally used for nodes that contain no children,
@@ -364,23 +372,25 @@ article[lang=en-US] {
   A <(i> block element)> consists of an optional selector
   followed by a pair of curly braces (<`{ }`>) containing zero or more nodes.
 
-  aside>figure {
-    ```
-    article {
-      Article
-      section { Section 1 }
-      section { Section 2 }
-    }
-    ```
-    hr>
-    section.box>.result {
-      .box {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      >```
+      article {
         Article
-        .box { Section 1 }
-        .box { Section 2 }
+        section { Section 1 }
+        section { Section 2 }
+      }
+      ```
+      {
+        .box {
+          Article
+          .box { Section 1 }
+          .box { Section 2 }
+        }
       }
     }
-    figcaption> Block elements can be nested to form
+    caption> Block elements can be nested to form
     the structure of the document.
     Borders have been added for visualization purposes.
   }
@@ -502,15 +512,18 @@ article[lang=en-US] {
   An <(i> inline element)> is an element placed inside a paragraph node.
   It consists of an optional node wrapped in angle brackets and parentheses: <`<( ... )>`>.
 
-  aside>figure {
-    ```
-    Click <(a[href=http://example.com/]> here)>.
-    ```
-    hr>
-    section.box>result {
-      Click <(a[href=http://example.com]> here)>.
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      >```
+      Click <(a[href=http://example.com/]> here)>.
+      ```
+
+      {
+        Click <(a[href=http://example.com]> here)>.
+      }
     }
-    figcaption> A link defined with an inline element.
+    caption> A link defined with an inline element.
   }
 
   An inline element can contain any kind of node, including
@@ -605,18 +618,6 @@ article[lang=en-US] {
   }
 
   h3#Inline-Formatting> Inline Formatting
-  aside>figure {
-    ```
-    Inline <#strong#>
-    and </emphasized/> text
-    ```
-    hr>
-    section.box>.result {
-    Inline <#strong#> and </emphasized/> text
-    }
-    figcaption> Strong and emphasized text are
-    typically rendered in <#bold#> and </italic/> type, respectively.
-  }
 
   <(i> Inline formatting)> nodes are a set of shorthands for certain inline elements.
   These should cover the most common scenarios for applying formatting to a slice of a paragraph.
@@ -677,28 +678,26 @@ article[lang=en-US] {
   Sometimes you want to include text without it being interpreted in the form of MinTyML nodes.
   For example, if your text includes characters that normally need to be escaped.
 
-  aside>figure {
-    table {
-      thead>> <(th> Escaped)> <(th> Plaintext Block)> <(th> Verbatim Text)>
+  aside>figure>table {
+    thead>> <(th> Escaped)> <(th> Plaintext Block)> <(th> Verbatim Text)>
 
-      {
-        >```
-        3 \< x \< 8
-        ```
+    {
+      >```
+      3 \< x \< 8
+      ```
 
-        >```
-        """
-        3 < x < 8
-        """
-        ```
+      >```
+      """
+      3 < x < 8
+      """
+      ```
 
-        >```
-        <[[3 < x < 8]]>
-        ```
-      }
+      >```
+      <[[3 < x < 8]]>
+      ```
     }
 
-    figcaption> Text containing <`<`>, <`>`>, <`{`>, or <`}`>
+    caption> Text containing <`<`>, <`>`>, <`{`>, or <`}`>
     may be easier to read in raw text form than with escape sequences.
   }
 
@@ -760,19 +759,22 @@ article[lang=en-US] {
   This means no nodes can be nested inside the segment
   and escape sequences will not be substitued.
 
-  aside>figure {
-    ```
-    <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
-    <[##[or like this: <[#[ ... ]#]>]##]>
-    or even like this: ]##]\>
-    ```
-    hr>
-    section.box>.result {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      > ```
       <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
       <[##[or like this: <[#[ ... ]#]>]##]>
-      or even like this: \<[##[ ... ]##]\>
+      or even like this: ]##]\>
+      ```
+
+      {
+        <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
+        <[##[or like this: <[#[ ... ]#]>]##]>
+        or even like this: \<[##[ ... ]##]\>
+      }
     }
-    figcaption> Verbatim segments using the alternate delimiters.
+    caption> Verbatim segments using the alternate delimiters.
   }
 
   The alternate delimiters <`<[#[`> and <`]#]>`> or <`<[##[`> and <`]##]>`>

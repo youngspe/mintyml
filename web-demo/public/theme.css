@@ -681,9 +681,10 @@ tbody:not(thead~*)>tr:first-child>th {
 td,
 th {
     padding-block: var(--margin-inline-block);
-    min-width: -moz-fit-content;
-    min-width: fit-content;
-    max-width: max-content;
+    min-width: 20%;
+    width: -moz-fit-content;
+    width: fit-content;
+    max-width: 90vw;
 }
 
 td>p {
