@@ -45,6 +45,8 @@ jobs:
 
     - name: Build web-demo
       working-directory: web-demo
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         export WEB_DEMO_BASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
         echo "::notice title=WEB_DEMO_BASE_URL::$WEB_DEMO_BASE_URL"
