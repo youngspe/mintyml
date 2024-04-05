@@ -18,6 +18,7 @@ use utils::UtilExt as _;
 
 use crate::utils::default;
 
+/// Processes MinTyML, a minimalist alternative syntax for HTML.
 #[derive(Debug, Parser)]
 struct Cli {
     #[command(subcommand)]
@@ -29,9 +30,12 @@ enum Command {
     Convert(Convert),
 }
 
+/// Convert MinTyML to HTML.
 #[derive(Debug, Args)]
 struct Convert {
-    #[arg(short = 'r', long, conflicts_with = "src_files", requires = "src_dir")]
+    /// Whether to recursively search subdirectories when searching a directory for source files.
+    /// If specified, the search will be limited to `DEPTH` levels of nested subdirectories.
+    #[arg(short = 'r', long, name="DEPTH", conflicts_with = "src_files", requires = "src_dir")]
     recurse: Option<Option<u32>>,
     #[command(flatten)]
     options: ConvertOptions,
@@ -44,8 +48,10 @@ struct Convert {
 #[derive(Debug, Args)]
 #[group(multiple = false)]
 struct ConvertDest {
+    /// Write the converted HTML to the given filename or directory
     #[arg(short = 'o', long)]
     out: Option<PathBuf>,
+    /// Write the converted HTML to stdout.
     #[arg(long, conflicts_with = "src_dir")]
     stdout: bool,
 }
@@ -53,20 +59,26 @@ struct ConvertDest {
 #[derive(Debug, Args)]
 #[group(required = true)]
 struct ConvertSource {
+    /// Read MinTyML source from stdin.
     #[arg(long, conflicts_with_all = ["src_dir", "src_files"], requires = "ConvertDest")]
     stdin: bool,
+    /// Search for MinTyML files in the given directory.
     #[arg(short = 'd', long = "dir")]
     src_dir: Option<PathBuf>,
+    /// Convert the specified MinTyML file(s).
     #[arg(num_args = 1..)]
     src_files: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, Args)]
 struct ConvertOptions {
+    /// Produce XHTML5 instead of HTML
     #[arg(short, long)]
     xml: bool,
+    /// Produce HTML with line breaks and indentation for readability.
     #[arg(short, long)]
     pretty: bool,
+    /// Number of spaces for each indentation level when `-pretty` is enabled.
     #[arg(long, requires = "pretty", value_parser = value_parser!(u8).range(0..=16), default_value = "2")]
     indent: u8,
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.

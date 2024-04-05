@@ -1,10 +1,11 @@
 [package]
 name = "mintyml"
 description = "A minialist alternative syntax to HTML"
-license = "MIT"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
-repository = "https://github.com/youngspe/mintyml"
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies.thiserror]
 version = "1.0.57"

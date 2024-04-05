@@ -4,3 +4,5 @@ resolver = "2"
 
 [workspace.package]
 license = "MIT"
+repository = "https://github.com/youngspe/mintyml"
+authors = ["Spencer Young"]

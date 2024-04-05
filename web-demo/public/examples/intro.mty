@@ -1023,33 +1023,34 @@ article[lang=en-US] {
 
   h4> Standard Contexts
 
-  aside>figure {
-    ```
-    section {
-      {
-        > {
-          > Hello, world!
+  aside>figure>table {
+    thead>> <(th> Implicit)> <(th> Explicit)>
+    {
+      > ```
+      section {
+        {
+          > {
+            > Hello, world!
+          }
         }
+
+        Goodbye, world!
+      }
+      ```
+
+      > ```
+      section {
+        div {
+          p> {
+            span> Hello, world!
+          }
       }
 
-      Goodbye, world!
-    }
-    ```
-    hr>
-    ```
-    section {
-      div {
-        p> {
-          span> Hello, world!
-        }
+        p> Goodbye, world!
       }
-
-      p> Goodbye, world!
+      ```
     }
-    ```
-
-    figcaption> <(b> Above)>: a sample with unspecified element types.
-    <(b> Below)>: an equivalent simple with the inferred types.
+    caption> Implicit vs equivalent explicit types
   }
 
   dl {

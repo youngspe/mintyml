@@ -1,8 +1,11 @@
 [package]
-name = "minty-cli"
+name = "mintyml-cli"
+description = "Creates HTML from MinTyML, a minialist alternative syntax to HTML"
 version = "0.1.0"
 edition = "2021"
+repository.workspace = true
 license.workspace = true
+authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,4 +16,4 @@ rayon = "1.8.1"
 
 [dependencies.mintyml]
 path = "../mintyml"
-version = "0.1.0"
+version = "0.1.2"
