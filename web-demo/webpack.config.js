@@ -33,7 +33,7 @@ const config = {
         }),
         new HtmlWebpackPlugin({
             template: 'index.html',
-            base: baseUrl || false,
+            base: baseUrl || '/',
         }),
         new HtmlWebpackTagsPlugin({
             tags: ['index.css', 'theme.css'],

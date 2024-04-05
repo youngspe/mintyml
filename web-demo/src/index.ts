@@ -38,7 +38,7 @@ function updateURL({ params, hash, push = false }: {
 }
 
 async function loadExample(exampleName: string) {
-    let res = fetch(`${document.baseURI}/examples/${exampleName}.mty`, {
+    let res = fetch(`${document.baseURI}examples/${exampleName}.mty`, {
         headers: { 'Accept': 'text/plain' },
     })
     return await (await res).text()
@@ -85,11 +85,11 @@ class Demo {
             `
             viewOutDoc.head.appendChild(frameStyle)
             const theme = document.createElement('link')
-            theme.href = `${document.baseURI}/theme.css`
+            theme.rel = "stylesheet"
+            theme.href = `${document.baseURI}theme.css`
             viewOutDoc.head.appendChild(theme)
             const base = document.createElement('base')
             base.target = "_parent"
-            base.href = document.baseURI
             viewOutDoc.head.appendChild(base)
         }
 
