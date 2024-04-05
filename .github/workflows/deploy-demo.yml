@@ -3,10 +3,6 @@ name: Deploy MinTyML web demo
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - mintyml/
-      - web-demo/
-      - minty-wasm/
   workflow_dispatch:
     
 
@@ -32,18 +28,21 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: 18.x
+        node-version: 20.x
+
+    - name: Setup wasm-pack
+      uses: jetli/wasm-pack-action@v0.4.0
 
     - name: Build minty-wasm
       working-directory: minty-wasm
       run: |
-        npm ci
+        npm install
         npm run build
 
     - name: Build web-demo
       working-directory: web-demo
       run: |
-        npm ci
+        npm install
         npm run build
         npx webpack
   
