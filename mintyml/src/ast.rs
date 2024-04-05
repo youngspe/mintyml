@@ -1,5 +1,44 @@
 use alloc::{boxed::Box, vec::Vec};
-use gramma::parse::{Location, LocationRange};
+use gramma::{
+    parse::{Location, LocationRange},
+    string_matcher::{IntoMatchString, StringPattern},
+    string_pattern,
+};
+
+fn unicode_escape() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(exactly("\\u{") + repeat(.., !char(('\n', '{', '}'))).simple() + exactly("}"))
+}
+
+fn escape() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(unicode_escape() | char('\\') + char(..))
+}
+
+fn identifier_char() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(char((ascii_alphanumeric(), "-:")) | escape())
+}
+
+fn identifier() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(identifier_char().repeat(1..).simple())
+}
+
+fn class_name() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(
+        (identifier_char() | char("!@$%^&*+=_/?();") + !precedes(char('>')))
+            .repeat(1..)
+            .simple()
+    )
+}
+
+fn attr_string() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(
+        char('\'') + (!char(('\\', '\'')) | escape()).repeat(1..).simple() + char('\'')
+            | char('"') + (!char(('\\', '"')) | escape()).repeat(1..).simple() + char('"')
+    )
+}
+
+fn element_name() -> StringPattern<impl IntoMatchString> {
+    string_pattern!(!precedes(ascii_digit()) + identifier())
+}
 
 gramma::define_token!(
     #[pattern(exact = ">")]
@@ -28,92 +67,73 @@ gramma::define_token!(
     pub struct Hash;
     #[pattern(exact = "=")]
     pub struct Equals;
-    #[pattern(regex = r"[a-zA-Z][:a-zA-Z0-9\-]*")]
+    #[pattern(matcher = element_name())]
     pub struct ElementName;
-    #[pattern(regex = r"(?x)(
-        [ : a-z A-Z 0-9 \- ]
-        | \\.
-    )+")]
+    #[pattern(matcher = identifier())]
     pub struct Ident;
-
-    #[pattern(
-        regex = r#"(?xm)
-    (
-        (?:
-            [ \ \t ]* (?:
-                [^ \s \{ \} < > \\ ]
-                | \\ (?: u \{ .*? \} | . )
-            )+
-        )+?
-    )
-    \s* (?:
-        [ @ \# \$ \^ & \* / ~ _ \[ \] \| ]+ >
-        | [ \) " ' ` \? ! : % ]>
-        | [ \{ \} < ]
-        | $
-    )"#,
-        capture = 1
-    )]
+    #[pattern(matcher = class_name())]
+    pub struct ClassName;
+    #[pattern(matcher = {
+        precedes(!whitespace())
+        + (
+            (whitespace() & !char('\n')).repeat(..).simple()
+            + (
+                !char("\\{}<>()@#$^&*?~_[]|/-+=\"'`!,.") & !whitespace()
+                | char("()@#$^&*?~_[]|/-+=\"'`!,.") + !precedes(char('>'))
+                | escape()
+            ).repeat(1..).simple()
+        ).repeat(1..).simple()
+    })]
     pub struct TextSegment;
 
-    #[pattern(regex = r#"(?xms)
-        ```
-        | """
-        | '''
-    "#)]
+    #[pattern(matcher = {
+        exactly("```") | exactly(r#"""""#) | exactly("'''")
+    })]
     pub struct InvalidTextSegment;
 
-    #[pattern(regex = r"[ \t]*\r?\n[ \t]*")]
+    #[pattern(matcher = {
+        whitespace().repeat(..).lazy()
+        + char('\n')
+        + char(..).repeat(..).lazy()
+        + (line_end() | precedes(!whitespace()))
+    })]
     pub struct NewLine;
 
-    #[pattern(regex = r"[ \t]+")]
+    #[pattern(matcher = (whitespace() & !char('\n')).repeat(1..))]
     pub struct Space;
-    #[pattern(regex = r"\s+")]
+    #[pattern(matcher = whitespace().repeat(1..))]
     pub struct Whitespace;
 
-    #[pattern(regex = r#"(?x) (
-        # wildcard element:
-        \*
-
-        # element, class, or id:
-        | [ \. \# ]? (
-            [ : a-z A-Z 0-9 \- ]
-            | \\ (:? u \{ .*? \} | .)
-        )+
-
-        # attribute:
-        | \[ (
-            [^ \[ \] \\ " ' ]
-            | \\ (:? u \{ .*? \} | .)
-            | "( [^ \\ " ] | \\ (:? u \{ .*? \} | .) )*"
-            | '( [^ \\ ' ] | \\ (:? u \{ .*? \} | .) )*'
-        )* \]
-    )+"#)]
+    #[pattern(matcher = {
+        (char('*') | element_name()).optional().simple()
+         +(
+            char(".#").repeat(1..).simple() + class_name()
+            | char('[') + (!char("[]\\\"'") | attr_string() | escape()).repeat(..).simple()  + char(']')
+        ).repeat(..)
+    })]
     pub struct SelectorString;
 
-    #[pattern(regex = r#"(?x)
-        [^ \s = > ' " / \] \[ ]+
-    "#)]
+    #[pattern(matcher = {
+        repeat(1.., !char(("=>'\"/[]\\", whitespace())) | escape()).simple()
+    })]
     pub struct AttributeName;
 
-    #[pattern(regex = r#"(?x)(
-        [^ \s \[ \] \\ " ' ]
-        | \\.
-    )+"#)]
+    #[pattern(matcher = {
+        repeat(1.., !char(("[]\\\"'", whitespace())) | escape()).simple()
+    })]
     pub struct UnquotedAttributeValue;
 
-    #[pattern(regex = r#"(?x)
-        " ( [^ \\ " ] | \\. )* "
-        | ' ( [^ \\ ' ] | \\. )* '
-    "#)]
+    #[pattern(matcher = {
+        char('"') + (!char("\\\"") | escape()).repeat(..).simple() + char('"')
+        | char('\'') + (!char("\\'") | escape()).repeat(..).simple() + char('\'')
+    })]
     pub struct QuotedString;
 
-    #[pattern(regex = r"(?xm) (
-        [^ < ! ]
-        | < [^ ! \n\ ]
-        | ! [^ > \n ]
-        | [ < ! ] $
-    )+")]
+    #[pattern(matcher = {
+        !char("<!")
+        | char('<') + !precedes(char('!'))
+        | char('!') + !precedes(char('>'))
+    })]
     pub struct CommentText;
 
     #[pattern(exact = "<!")]
@@ -146,7 +166,9 @@ gramma::define_token!(
     #[pattern(exact = "\">")]
     pub struct CloseQuote;
 
-    #[pattern(regex = r"(?s)<`.*?`>")]
+    #[pattern(matcher = {
+        exactly("<`") + char(..).repeat(..).lazy() + exactly("`>")
+    })]
     pub struct InlineCode;
 
     #[pattern(exact = r"<[")]
@@ -155,22 +177,40 @@ gramma::define_token!(
     #[pattern(exact = "raw")]
     pub struct KeywordRaw;
 
-    #[pattern(regex = r"(?s)\[.*?\]\]>")]
+    #[pattern(matcher = {
+        char('[') + char(..).repeat(..).lazy() + exactly("]]>")
+    })]
     pub struct VerbatimTail0;
 
-    #[pattern(regex = r"(?s)#\[.*?\]#\]>")]
+    #[pattern(matcher = {
+        exactly("#[") + char(..).repeat(..).lazy() + exactly("]#]>")
+    })]
     pub struct VerbatimTail1;
 
-    #[pattern(regex = r"(?s)##\[.*?\]##\]>")]
+    #[pattern(matcher = {
+        exactly("##[") + char(..).repeat(..).lazy() + exactly("]##]>")
+    })]
     pub struct VerbatimTail2;
 
-    #[pattern(regex = r#"(?ms)"""(:?[^\n"].*)?\n.*?^[ \t]*""""#)]
+    #[pattern(matcher = {
+        exactly("\"\"\"") + (!char("\n\"")).repeat(..).simple() + char("\n")
+        + char(..).repeat(..).lazy()
+        + line_start() + char(" \t").repeat(..).simple() + exactly("\"\"\"")
+    })]
     pub struct MultilineEscaped;
 
-    #[pattern(regex = r#"(?ms)'''(:?[^\n'].*)?\n.*?^[ \t]*'''"#)]
+    #[pattern(matcher = {
+        exactly("'''") + (!char("\n'")).repeat(..).simple() + char("\n")
+        + char(..).repeat(..).lazy()
+        + line_start() + char(" \t").repeat(..).simple() + exactly("'''")
+    })]
     pub struct MultilineUnescaped;
 
-    #[pattern(regex = r"(?ms)```[^\n`]*\n.*?^[ \t]*```")]
+    #[pattern(matcher = {
+        exactly("```") + (!char("\n`")).repeat(..).simple() + char("\n")
+        + char(..).repeat(..).lazy()
+        + line_start() + char(" \t").repeat(..).simple() + exactly("```")
+    })]
     pub struct MultilineCode;
 );
 
@@ -381,12 +421,12 @@ gramma::define_rule!(
 
     pub struct ClassSelector {
         pub dot: Dot,
-        pub ident: Ident,
+        pub ident: ClassName,
     }
 
     pub struct IdSelector {
         pub hash: Hash,
-        pub ident: Ident,
+        pub ident: ClassName,
     }
 
     #[transform(ignore_around<Whitespace>)]
