@@ -46,6 +46,7 @@ jobs:
     - name: Build web-demo
       working-directory: web-demo
       run: |
+        export WEB_DEMO_BASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
         npm install
         npm run build
     
