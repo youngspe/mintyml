@@ -1,5 +1,7 @@
 import { ConvertResponseMessage, ConvertRequestMessage } from './message'
 
+import '../index.scss'
+
 import * as ace from 'ace-builds'
 import 'ace-builds/src-noconflict/theme-solarized_dark'
 import 'ace-builds/src-noconflict/theme-solarized_light'
