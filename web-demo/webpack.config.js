@@ -2,12 +2,14 @@
 
 const path = require('path')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const HtmlWebpackTagsPlugin = require('html-webpack-tags-plugin')
 
 const isProduction = process.env.NODE_ENV == 'production'
 
 
 const stylesHandler = 'style-loader'
 
+const baseUrl = process.env.WEB_DEMO_BASE_URL
 
 /** @type { import('webpack').Configuration } */
 const config = {
@@ -25,6 +27,12 @@ const config = {
     plugins: [
         new HtmlWebpackPlugin({
             template: 'index.html',
+            base: baseUrl || false,
+        }),
+        new HtmlWebpackTagsPlugin({
+            tags: ['index.css', 'theme.css'],
+            append: true,
+            addPublicPath: (assetPath, publicPath) => `${baseUrl || '/'}${publicPath}${assetPath}`,
         }),
 
         // Add your plugins here
