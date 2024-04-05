@@ -1,0 +1,34 @@
+h1> Formatting
+
+h2> Built-in formatting tags
+
+ul {
+  > </emphasis/>
+  > <#strong#>
+  > <_underline_>
+  > <~strikethrough~>
+  > <"inline quote with a <"nested"> quote ">
+  > <`inline code`>
+  > ```
+  code
+  block
+  ```
+}
+
+h2> HTML formatting
+
+These are just a few examples of formatting using HTML elements:
+
+ul {
+  > <(ins> inserted)>
+  > <(del> deleted)>
+  > <(kbd> ctrl)> + <(kbd> alt)> + <(kbd> del)>
+  > <(samp> sample output)>
+  >blockquote {
+    These are the contents of a block quote.
+
+    It contains multiple paragraphs...
+
+    footer><(cite> citation)>
+  }
+}

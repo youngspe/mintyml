@@ -79,7 +79,8 @@ class Demo {
             body {
                 inline-size: max-content;
                 max-inline-size: 100%;
-                margin: 0;
+                margin-inline: auto;
+                margin-block: var(--margin-block-wide);
             }
             `
             viewOutDoc.head.appendChild(frameStyle)
@@ -345,4 +346,9 @@ const params = new URLSearchParams(window.location.search)
 
 const exampleName = params.get('example') ?? 'intro'
 
-new Demo(document.querySelector('demo-container')!, exampleName, ['intro', 'table']).init()
+new Demo(document.querySelector('demo-container')!, exampleName, [
+    'intro',
+    'table',
+    'blockquote',
+    'formatting',
+]).init()

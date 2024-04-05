@@ -138,17 +138,17 @@ article[lang=en-US] {
 
     One or more HTML attributes that provide more information about the element,
     surrounded by brackets (<`[ ]`>).
-    For example, <`[href=http://www.example.com/]`>
+    For example, <`[href=http://example.com/]`>
     sets the destination of a link.
     Multiple attributes are separated by a space.
     If an attribute value contains a space or a closing bracket,
     it can be surrounded by single quotes (<(code> ' ')>) or double quotes (<`" "`>).
-    For example, <`[href=http://www.example.com/ title='Example site']`>
+    For example, <`[href=http://example.com/ title='Example site']`>
   }
 
   Putting all of the components together to form a selector might look like this:
   ```
-  a#example-link.external[href=http://www.example.com/ title='Example site']
+  a#example-link.external[href=http://example.com/ title='Example site']
   ```
 
   The above selector describes a link that:
@@ -157,7 +157,7 @@ article[lang=en-US] {
 
     Is given the <`external`> class.
 
-    Points to <`http://www.example.com/`>.
+    Points to <`http://example.com/`>.
 
     Has the title <"Example site">.
   }
@@ -308,7 +308,7 @@ article[lang=en-US] {
 
   Line elements contain the node following <`>`> if one is present.
 
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption>
 
     thead>* {
@@ -404,9 +404,7 @@ article[lang=en-US] {
 
   aside>figure {
     table {
-      thead {
-        <(th> MinTyML)> <(th> HTML)> <(th> Rendered)>
-      }
+      thead>> <(th> MinTyML)> <(th> HTML)> <(th> Rendered)>
       {
         >```
         div {
@@ -467,9 +465,8 @@ article[lang=en-US] {
 
   scroll-x>table {
     caption> Block vs. line-block inference comparison
-    thead {
-      <(th> Example)> <(th> MinTyML)> <(th> HTML)>
-    }
+    thead>> <(th> Example)> <(th> MinTyML)> <(th> HTML)>
+
     {
       th> Block
       >```
@@ -507,14 +504,104 @@ article[lang=en-US] {
 
   aside>figure {
     ```
-    Click <(a[href=http://www.example.com/]> here)>.
+    Click <(a[href=http://example.com/]> here)>.
     ```
     hr>
     section.box>result {
-      Click <(a[href=http://www.example.com/]> here)>.
+      Click <(a[href=http://example.com]> here)>.
     }
-    figcaption> Placing a line element within the brackets
-    allows one to add elements like links without disrupting the flow of text.
+    figcaption> A link defined with an inline element.
+  }
+
+  An inline element can contain any kind of node, including
+  elements and paragraphs.
+
+  .scroll-x.box>table {
+    thead {
+      <(th[rowspan=2]> Inner Node)> <(th[colspan=2]>Example)>
+
+      <(th> MinTyML)> <(th> Rendered)>
+    }
+
+    {
+      th> Paragraph
+
+      >```
+      <( Hello, <_world_>! )>
+      ```
+
+      { .result {
+        <( Hello, <_world_>! )>
+      }}
+    }
+
+    {
+      th> Line
+
+      >```
+      <(button[type=button]> OK)>
+      ```
+
+      { .result {
+      <(button[type=button]> OK)>
+      }}
+    }
+
+    {
+      th> Block
+
+      >```
+      ol {
+        > item 1 <(ol {
+          > item 2
+          > item 3
+        })>
+        > item 4 <(ol {
+          > item 5
+          > item 6 <(ol {
+            > item 7
+          })>
+        })>
+      }
+      ```
+
+      { .result {
+        ol {
+          > item 1 <(ol {
+            > item 2
+            > item 3
+          })>
+          > item 4 <(ol {
+            > item 5
+            > item 6 <(ol {
+              > item 7
+            })>
+          })>
+        }
+      }}
+    }
+
+    {
+      th> Line-block
+
+      >```
+      ul> <(eggs)> <(milk)> <(> {
+        del> red
+        ins> green
+
+        chilis
+      })>
+      ```
+
+      { .result {
+          ul> <(eggs)> <(milk)> <(> {
+        del> red
+        ins> green
+
+        chilis
+        })>
+      }}
+    }
   }
 
   h3#Inline-Formatting> Inline Formatting
@@ -534,7 +621,7 @@ article[lang=en-US] {
   <(i> Inline formatting)> nodes are a set of shorthands for certain inline elements.
   These should cover the most common scenarios for applying formatting to a slice of a paragraph.
 
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption> Inline formatting nodes and equivalents
     thead>* {
       th> Formatting
@@ -587,6 +674,37 @@ article[lang=en-US] {
 
   h3> Raw Text
 
+  Sometimes you want to include text without it being interpreted in the form of MinTyML nodes.
+  For example, if your text includes characters that normally need to be escaped.
+
+  aside>figure {
+    table {
+      thead>> <(th> Escaped)> <(th> Plaintext Block)> <(th> Verbatim Text)>
+
+      {
+        >```
+        3 \< x \< 8
+        ```
+
+        >```
+        """
+        3 < x < 8
+        """
+        ```
+
+        >```
+        <[[3 < x < 8]]>
+        ```
+      }
+    }
+
+    figcaption> Text containing <`<`>, <`>`>, <`{`>, or <`}`>
+    may be easier to read in raw text form than with escape sequences.
+  }
+
+  It's recommended that <`script`> and <`style`> elements contain raw text
+  to avoid conflict between MinTyML syntax and JavaScript or CSS syntax.
+
   h4#Plaintext-Block> Plaintext Block
 
   A <(i> plaintext block)> is consists or zero or more lines of text surrounded by
@@ -597,9 +715,9 @@ article[lang=en-US] {
   will have escape sequences subsituted,
   but those delimited by single quotes (<`'''`>) will not.
 
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption> Comparison of single-quoted and double-quoted plaintext blocks
-    thead { <(th> Delimiter)> <(th>MinTyML)> <(th>Rendered)> }
+    thead>> <(th> Delimiter)> <(th>MinTyML)> <(th>Rendered)>
 
     {
       th> Single quotes
@@ -629,9 +747,6 @@ article[lang=en-US] {
         """
       }}
     }
-
-    {
-    }
   }
 
   Any indentation prior to the closing quotes' indentation level will be discarded.
@@ -657,14 +772,14 @@ article[lang=en-US] {
       <[##[or like this: <[#[ ... ]#]>]##]>
       or even like this: \<[##[ ... ]##]\>
     }
-    figcaption> Verbatim segments can include <`]]>`> or <`]#]>`> by using
-    delimiters that include one or two <`#`>, respectively.
+    figcaption> Verbatim segments using the alternate delimiters.
   }
 
-  .scroll-x>table {
-    thead {
-      <(th> MinTyML)> <(th>HTML)> <(th> Rendered)>
-    }
+  The alternate delimiters <`<[#[`> and <`]#]>`> or <`<[##[`> and <`]##]>`>
+  may also be used when case the text may contain <`]]>`> or <`]#]>`>.
+
+  .scroll-x.box>table {
+    thead>> <(th> MinTyML)> <(th>HTML)> <(th> Rendered)>
 
     {
       >```
@@ -739,9 +854,9 @@ article[lang=en-US] {
   ignored.
   A code block is equivalent to a single-quoted plaintext block following <`pre>code>`>
 
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption> Code block defined with code block syntax vs. a plaintext block
-    thead { <(th> Code Block Source)> <(th> Plaintext Block Source)> <(th> Rendered)> }
+    thead>> <(th> Code Block Source)> <(th> Plaintext Block Source)> <(th> Rendered)>
     {
       >pre>code>'''
       ```
@@ -768,12 +883,73 @@ article[lang=en-US] {
     }
   }
 
+  h3> Comment
+
+  A <(i> comment)> contains text that is visible in the source of the document.
+  but excluded from the presentation.
+  Comments are enclosed with <`<!`> and <`!>`> like so:
+
+  ```
+  <! This is a comment !>
+  ```
+
+  The above example would be represented in HTML with:
+
+  ```
+  <!-- This is a comment -->
+  ```
+
+  aside>figure {
+
+    ```
+    <!
+      div {
+        foo
+        <! TODO: complete this div !>
+      }
+    !>
+    ```
+
+    figcaption> Comments can be nested so nodes that already contain
+    comments can be commented out.
+  }
+
+  Comments can be used anywhere a node is valid, including within a paragraph:
+
+  .scroll-x.box>table {
+    caption> Comments within a paragraph
+
+    thead>> <(th> Source)> <(th> Rendered)>
+
+    {
+      >```
+      Hello, <! this is a comment !> world!
+      ```
+
+      { .result {
+      Hello, <! this is a comment !> world!
+      } }
+    }
+
+    {
+      >```
+      Hello,<! this is a comment !>world!
+      ```
+
+      { .result {
+      Hello,<! this is a comment !>world!
+      } }
+    }
+  }
+
   h3#Escape-Sequence> Escape Sequence
 
-  .scroll-x>table {
-    thead {
-      <(th> Escape)> <(th> Output)>
-    }
+  An <(i> Escape sequence)> begins with a backslash (<`\`>)
+  and provides an alternate representation of a character.
+
+  .scroll-x.box>table {
+    caption> All valid escapes
+    thead>> <(th> Escape)> <(th> Output)>
 
     <(<`\n`>)> <(Line feed (new line))>
 
@@ -793,9 +969,9 @@ article[lang=en-US] {
         no greater than <(.num> 7F)>
       }
       {
-        The character with unicode number <(var> hh)>.
+        The character with ASCII number <(var> hh)>.
 
-        e.g. <`\xE6`> becomes <"\xE6">.
+        e.g. <`\x7B`> becomes <"\x7B">.
       }
     }
 
@@ -838,9 +1014,41 @@ article[lang=en-US] {
   }
   h2#Element-Inference> Element Inference
 
-  h3> Contexts
+  h3> Context
+
+  The type of an unspecified element is inferred based on <(i> context)>,
+  which is determined by the type of the containing element.
 
   h4> Standard Contexts
+
+  aside>figure {
+    ```
+    section {
+      {
+        > {
+          > Hello, world!
+        }
+      }
+
+      Goodbye, world!
+    }
+    ```
+    hr>
+    ```
+    section {
+      div {
+        p> {
+          span> Hello, world!
+        }
+      }
+
+      p> Goodbye, world!
+    }
+    ```
+
+    figcaption> <(b> Above)>: a sample with unspecified element types.
+    <(b> Below)>: an equivalent simple with the inferred types.
+  }
 
   dl {
     > section
@@ -879,7 +1087,7 @@ article[lang=en-US] {
 
       ul.row-list {
         > <`p`>
-        > <`h1`>..<`h6`>
+        > <`h1`>...<`h6`>
         > <`span`>
         > <(a[href=#Inline-Formatting]>inline formatting)>
       }
@@ -898,9 +1106,7 @@ article[lang=en-US] {
     > <`figcaption`>
   }
 
-
-
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption> Inference by context and node type
     thead {
       {
@@ -933,6 +1139,32 @@ article[lang=en-US] {
   }
 
   h4> Specialized Contexts
+
+  Some contexts are specific to a single element type
+  or small group of element types.
+
+  aside>figure {
+    ```
+    details[open] {
+      More info
+
+      This is the more detailed
+      information.
+    }
+    ```
+    hr>
+    section.box>.result {
+      details[open].box {
+        More info
+
+        This is the more detailed
+        information.
+      }
+    }
+
+    figcaption> <`detail`>'s specialized context
+    infers the first paragraph as the summary.
+  }
 
   dl {
     #List-Inference> list
@@ -1002,7 +1234,7 @@ article[lang=en-US] {
   }
 
 
-  .scroll-x>table {
+  .scroll-x.box>table {
     caption> Inference by context and node type
     thead {
       {
@@ -1072,177 +1304,6 @@ article[lang=en-US] {
       > <`area`>
       > <`area`>
       >
-    }
-  }
-
-  h2> Examples
-
-  section>details[open] {
-    >h3> Link
-
-    .figures {
-      figure> {
-        ```
-        > {
-          Click
-          a[href=http://www.example.com/]> here
-
-          for more information.
-        }
-        ```
-        hr>
-        section.box>.result { > {
-          Click
-          a[href=http://www.example.com/]> here
-
-          for more information.
-        }}
-        figcaption> A link declared with a line element inside a line-block.
-      }
-
-      figure> {
-        ```
-        Click <(a[href=http://www.example.com/]> here)> for more information.
-        ```
-        hr>
-        section.box>.result {
-          Click <(a[href=http://www.example.com/]> here)> for more information.
-        }
-        figcaption> A link declared with an inline element.
-      }
-    }
-  }
-
-  section>details[open] {
-    >h3> Block Quote
-
-    .figures {
-      figure {
-        ```
-        blockquote {
-          Lorem ipsum dolor sit amet
-          consectetur adipiscing elit.
-
-          Sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua.
-
-          footer>cite> anonymous
-        }
-        ```
-        hr>
-        section.box>.result>blockquote {
-          Lorem ipsum dolor sit amet,
-          consectetur adipiscing elit.
-
-          Sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua.
-
-          footer>cite> anonymous
-        }
-        figcaption> A block quote with a citation.
-      }
-    }
-  }
-
-  section>details[open] {
-    >h3> Table
-
-    .figures {
-      figure {
-        ```
-        table {
-          caption> Table caption
-
-          thead { <(th> Column 1)> <(th> Column 2)> }
-
-          <(Cell A)> <(Cell B)>
-
-          <(Cell C)> <(Cell D)>
-        }
-        ```
-        hr>
-
-        section.box>.result>table {
-          caption> Table caption
-
-          thead { <(th> Column 1)> <(th> Column 2)> }
-
-          <(Cell A)> <(Cell B)>
-
-          <(Cell C)> <(Cell D)>
-        }
-
-        figcaption> A table with inline elements for cells.
-      }
-
-      figure {
-        ```
-        table {
-          caption> Table caption
-
-          thead>* {
-            th> Column 1
-            th> Column 2
-          }
-
-          {
-            {
-              Cell A
-            }
-            {
-              Cell B
-            }
-          }
-          {
-            {
-              Cell C
-            }
-            {
-              Cell D
-            }
-          }
-        }
-        ```
-        hr>
-
-        section.box>.result>table {
-          caption> Table caption
-
-          thead>* {
-            th> Column 1
-            th> Column 2
-          }
-
-          {
-            {
-              Cell A
-
-              Lorem
-            }
-            {
-              Cell B
-
-              Ipsum
-            }
-          }
-          {
-            {
-              Cell C
-
-              Dolor
-            }
-            {
-              Cell D
-
-              Sit
-            }
-          }
-        }
-
-        figcaption> A table with block elements for cells.
-        When block elements are used, the text within the cells is organized
-        into paragraphs.
-      }
     }
   }
 }
