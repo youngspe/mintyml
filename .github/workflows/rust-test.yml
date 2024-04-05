@@ -3,12 +3,14 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
-    paths-ignore: &paths-ignore
+    paths-ignore:
       - ./github
       - ./web-demo
   pull_request:
     branches: [ "main" ]
-    paths-ignore: *paths-ignore
+    paths-ignore:
+      - ./github
+      - ./web-demo
   workflow_dispatch:
 
 env:
