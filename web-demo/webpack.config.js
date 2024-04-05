@@ -3,6 +3,7 @@
 const path = require('path')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const HtmlWebpackTagsPlugin = require('html-webpack-tags-plugin')
+const CopyPlugin = require('copy-webpack-plugin')
 
 const isProduction = process.env.NODE_ENV == 'production'
 
@@ -25,6 +26,11 @@ const config = {
         asyncWebAssembly: true,
     },
     plugins: [
+        new CopyPlugin({
+            patterns: [
+                { from: 'public' },
+            ],
+        }),
         new HtmlWebpackPlugin({
             template: 'index.html',
             base: baseUrl || false,
