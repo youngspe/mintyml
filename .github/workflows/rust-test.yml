@@ -3,8 +3,13 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
+    paths-ignore: &paths-ignore
+      - ./github
+      - ./web-demo
   pull_request:
     branches: [ "main" ]
+    paths-ignore: *paths-ignore
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,6 +20,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Run tests
       run: cargo test --verbose
