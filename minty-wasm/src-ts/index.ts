@@ -1,6 +1,6 @@
 declare function require(s: string): any
 
-let _mintyml: Promise<typeof import('../pkg-web/minty_wasm.d.ts')>
+let _mintyml: Promise<typeof import('../pkg-node/minty_wasm.d.ts')>
 
 // We need to know if we're running in a browser (bundled with e.g. WebPack)
 // or in node.js. If we're in a browser, we import from 'pkg-web' which imports the

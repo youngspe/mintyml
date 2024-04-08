@@ -10,6 +10,11 @@ wasm-pack *ARGS:
     wasm-pack build --no-pack {{ ARGS }}
 
 build-wasm-web: (wasm-pack "-d" "pkg-web" "-t" "bundler")
+    if [ ! -f pkg-node/minty_wasm.d.ts ]; then \
+        mkdir -p pkg-node; \
+        cp pkg-web/minty_wasm.d.ts pkg-node/minty_wasm.d.ts; \
+    fi
+
 build-wasm-node: (wasm-pack "-d" "pkg-node" "-t" "nodejs")
 
 build-tsc:
