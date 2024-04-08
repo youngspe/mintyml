@@ -27,7 +27,7 @@ jobs:
   get-changes:
     runs-on: ubuntu-latest
     outputs:
-      dirs: ${{ github.event_name != 'workflow_dispatch' && fromJson('"${{steps.changed_files.outputs.all_changed_files}}"') || '[".github","mintyml","minty-cli","minty-wasm","web-demo"]' }}
+      dirs: ${{ github.event_name != 'workflow_dispatch' && steps.changed_files.outputs.all_changed_files || '[".github","mintyml","minty-cli","minty-wasm","web-demo"]' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +40,7 @@ jobs:
           dir_names_exclude_current_dir: true
           dir_names_max_depth: 1
           json: true
+          escape_json: false
 
   on-push:
     runs-on: ubuntu-latest
