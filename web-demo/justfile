@@ -7,7 +7,7 @@ serve:
     npx webpack serve
 
 install:
-    npm ci
+    npm install
 
 webpack:
     npx webpack --mode=production --node-env=production
