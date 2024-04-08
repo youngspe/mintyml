@@ -30,6 +30,7 @@ jobs:
       dirs: ${{ github.event_name != 'workflow_dispatch' && steps.changed_files.outputs.all_changed_files || '[".github","mintyml","minty-cli","minty-wasm","web-demo"]' }}
 
     steps:
+      - uses: actions/checkout@v4
       - name: Get changed files
         if: github.event_name != 'workflow_dispatch'
         id: changed_files
