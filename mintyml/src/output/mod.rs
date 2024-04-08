@@ -448,7 +448,11 @@ pub fn output_html_to(
     document
         .nodes
         .iter()
-        .try_for_each(|node| cx.process_node(node))
+        .try_for_each(|node| cx.process_node(node))?;
+
+    cx.line()?;
+
+    Ok(())
 }
 
 #[test]

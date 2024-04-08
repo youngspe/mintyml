@@ -1,0 +1,10 @@
+set fallback
+
+serve:
+    npx webpack serve
+
+webpack:
+    npx webpack --mode=production --node-env=production
+
+@build:
+    just build-web-demo

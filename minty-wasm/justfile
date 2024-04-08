@@ -1,0 +1,23 @@
+set fallback
+
+@default:
+    just --list
+
+wasm-pack *ARGS:
+    wasm-pack build --no-pack {{ ARGS }}
+
+build-wasm-web: (wasm-pack "-d" "pkg-web" "-t" "bundler")
+build-wasm-node: (wasm-pack "-d" "pkg-node" "-t" "nodejs")
+
+build-tsc:
+    npx tsc -p tsconfig.build.json
+
+test-exec:
+    npx tsc -p tsconfig.test.json
+    npx jest
+
+publish-exec:
+    npm publish
+
+build:
+    just build-node

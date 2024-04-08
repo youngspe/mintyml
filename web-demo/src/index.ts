@@ -40,7 +40,7 @@ function updateURL({ params, hash, push = false }: {
 }
 
 async function loadExample(exampleName: string) {
-    let res = fetch(`${document.baseURI}examples/${exampleName}.mty`, {
+    let res = fetch(`${document.baseURI}examples${exampleName}.mty`, {
         headers: { 'Accept': 'text/plain' },
     })
     return await (await res).text()
@@ -248,9 +248,9 @@ class Demo {
                 this._updateDoc(e.data.output)
             } else {
                 const annotations: ace.Ace.Annotation[] = []
-                if (e.data.error.syntax_errors) {
+                if (e.data.error.syntaxErrors) {
                     let doc = session.getDocument()
-                    for (const error of e.data.error.syntax_errors) {
+                    for (const error of e.data.error.syntaxErrors) {
                         let start = doc.indexToPosition(error.start, 0)
                         let end = doc.indexToPosition(error.end, 0)
                         let range = new ace.Range(
