@@ -23,7 +23,7 @@ test-cli:
 @build-node-tsc: install-node
     just exec minty-wasm build-tsc
 
-@build-node: (build-node-wasm "web") (build-node-wasm "node") && build-node-tsc
+@build-node: install-node (build-node-wasm "web") (build-node-wasm "node") build-node-tsc
 
 @publish-node: build-node test-node
     just exec minty-wasm publish-exec

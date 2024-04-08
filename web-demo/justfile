@@ -1,5 +1,8 @@
 set fallback
 
+@default:
+    just --list
+
 serve:
     npx webpack serve
 
