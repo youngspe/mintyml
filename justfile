@@ -41,4 +41,4 @@ fix-site-permissions:
     done
 
 @exec DIR CMD *ARGS:
-    just -f {{ DIR / 'justfile' }} "${@:2}"
+    shift 1; just -f {{ DIR / 'justfile' }} "$@"
