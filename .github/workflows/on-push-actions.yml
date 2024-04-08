@@ -66,7 +66,7 @@ jobs:
         node-version: "20"
 
     - name: Setup wasm-pack
-      if: env.update_node || env.update_core
+      if: env.update_node || env.update_core || env.update_demo
       uses: jetli/wasm-pack-action@v0.4.0
 
     - name: Specify just commands
