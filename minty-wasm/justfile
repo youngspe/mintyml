@@ -3,6 +3,9 @@ set fallback
 @default:
     just --list
 
+install:
+    npm install
+
 wasm-pack *ARGS:
     wasm-pack build --no-pack {{ ARGS }}
 

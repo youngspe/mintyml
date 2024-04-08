@@ -9,7 +9,7 @@ test-core:
 test-cli:
     cargo test --manifest-path minty-cli/Cargo.toml --verbose
 
-@test-node: (build-node-wasm "node")
+@test-node: install-node (build-node-wasm "node")
     just exec minty-wasm test-exec
 
 @test: test-core test-cli test-node
@@ -17,7 +17,10 @@ test-cli:
 @build-node-wasm VARIANT: && build-node-tsc
     just exec minty-wasm build-wasm-{{ VARIANT }}
 
-@build-node-tsc:
+@install-node:
+    just exec minty-wasm install
+
+@build-node-tsc: install-node
     just exec minty-wasm build-tsc
 
 @build-node: (build-node-wasm "web") (build-node-wasm "node") && build-node-tsc
@@ -25,10 +28,13 @@ test-cli:
 @publish-node: build-node test-node
     just exec minty-wasm publish-exec
 
-@serve-web-demo: && (build-node-wasm "web") build-node-tsc
+@install-web-demo:
+    just exec web-demo install
+
+@serve-web-demo: install-web-demo && (build-node-wasm "web") build-node-tsc
     just exec web-demo serve &
 
-@build-web-demo: (build-node-wasm "web") build-node-tsc && fix-site-permissions
+@build-web-demo: install-web-demo (build-node-wasm "web") build-node-tsc && fix-site-permissions
     just exec web-demo webpack
 
 build-cli:

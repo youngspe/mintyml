@@ -3,6 +3,9 @@ set fallback
 serve:
     npx webpack serve
 
+install:
+    npm ci
+
 webpack:
     npx webpack --mode=production --node-env=production
 
