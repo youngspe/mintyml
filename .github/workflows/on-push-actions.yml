@@ -72,7 +72,7 @@ jobs:
         if [ -n "$update_cli" ]; then cmds+=" test-cli"; fi
         if [ -n "$update_node" ]; then cmds+=" test-node"; fi
         if [ -n "$update_core$update_node$update_demo" ]; then cmds+=" build-web-demo"; fi
-        echo "cmds=$cmds" >> $GITHUB_OUTPUTS
+        echo "cmds=$cmds" >> "$GITHUB_OUTPUT"
 
     - name: Set web demo base URL
       if: env.update_core || env.update_node || env.update_demo
@@ -81,7 +81,7 @@ jobs:
       run: |
         WEB_DEMO_BASE_URL=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url')
         echo "::notice title=WEB_DEMO_BASE_URL::$WEB_DEMO_BASE_URL"
-        echo "WEB_DEMO_BASE_URL=$WEB_DEMO_BASE_URL" >> $GITHUB_ENV
+        echo "WEB_DEMO_BASE_URL=$WEB_DEMO_BASE_URL" >> "$GITHUB_ENV"
 
     - name: Execute just commands
       run: |
