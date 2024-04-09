@@ -14,7 +14,7 @@ test-cli:
 
 @test: test-core test-cli test-node
 
-@build-node-wasm VARIANT: && build-node-tsc
+@build-node-wasm VARIANT:
     just exec minty-wasm build-wasm-{{ VARIANT }}
 
 @install-node:
@@ -34,17 +34,16 @@ test-cli:
 @serve-web-demo: install-web-demo && (build-node-wasm "web") build-node-tsc
     just exec web-demo serve &
 
-@build-web-demo: install-web-demo (build-node-wasm "web") build-node-tsc && fix-site-permissions
+@build-web-demo: (build-node-wasm "web") build-node-tsc install-web-demo
     just exec web-demo webpack
 
 build-cli:
     cargo build --release --manifest-path minty-cli/Cargo.toml
 
-fix-site-permissions:
+act *ARGS:
     #!sh
-    chmod -c -R +rX "web-demo/dist/" | while read line; do
-        echo "::warning title=Invalid file permissions automatically fixed::$line"
-    done
+    repo=$(git remote get-url origin | sed -E 's:^.*\W(\w+/\w+)\.git$:\1:')
+    gh act --env GH_TOKEN=$(gh auth token) --pull=false --rebuild=false --local-repository $repo=./ "$@"
 
 @exec DIR CMD *ARGS:
-    shift 1; just -f {{ DIR / 'justfile' }} "$@"
+    shift 2; just {{DIR}}/{{CMD}} "$@"

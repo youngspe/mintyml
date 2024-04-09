@@ -3,7 +3,7 @@
     "compilerOptions": {
         "noEmit": false,
         "declaration": true,
-        "outDir": "./out.js",
+        "outDir": "./out-js",
     },
     "include": ["src-ts/**/*"],
 }

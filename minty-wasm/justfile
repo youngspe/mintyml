@@ -21,7 +21,6 @@ build-tsc:
     npx tsc -p tsconfig.build.json
 
 test-exec:
-    npx tsc -p tsconfig.test.json
     npx jest
 
 publish-exec:
