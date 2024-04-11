@@ -40,10 +40,16 @@ test-cli:
 build-cli:
     cargo build --release --manifest-path minty-cli/Cargo.toml
 
+hash-files DIR +FILES:
+    #!env bash
+    shift 1
+    cd "{{ DIR }}"
+    git ls-files -z "$@" | sort -z | xargs --null md5sum | md5sum
+
 act *ARGS:
-    #!sh
+    #!env bash
     repo=$(git remote get-url origin | sed -E 's:^.*\W(\w+/\w+)\.git$:\1:')
     gh act --env GH_TOKEN=$(gh auth token) --pull=false --rebuild=false --local-repository $repo=./ "$@"
 
 @exec DIR CMD *ARGS:
-    shift 2; just {{DIR}}/{{CMD}} "$@"
+    shift 2; just "{{DIR}}/{{CMD}}" "$@"

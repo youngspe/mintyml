@@ -13,9 +13,6 @@ on:
       changed_dirs:
         type: string
         default: '[".github","mintyml","minty-cli","minty-wasm","web-demo"]'
-      skip_deploy_pages:
-        type: boolean
-        default: false
 
 jobs:
   get-changes:
@@ -53,9 +50,6 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: "20"
-
-    # - run: |
-    #     echo "~/.cargo/bin" >> $GITHUB_PATH
 
     - name: Rust cache
       uses: actions/cache@v3
