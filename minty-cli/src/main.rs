@@ -19,6 +19,9 @@ use utils::UtilExt as _;
 use crate::utils::default;
 
 /// Processes MinTyML, a minimalist alternative syntax for HTML.
+///
+/// For more information, see https://youngspe.github.io/mintyml
+/// and https://github.com/youngspe/mintyml
 #[derive(Debug, Parser)]
 struct Cli {
     #[command(subcommand)]
@@ -78,7 +81,7 @@ struct ConvertOptions {
     /// Produce HTML with line breaks and indentation for readability.
     #[arg(short, long)]
     pretty: bool,
-    /// Number of spaces for each indentation level when `-pretty` is enabled.
+    /// Number of spaces for each indentation level when `--pretty` is enabled.
     #[arg(long, requires = "pretty", value_parser = value_parser!(u8).range(0..=16), default_value = "2")]
     indent: u8,
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.

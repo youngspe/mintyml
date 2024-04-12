@@ -33,7 +33,7 @@ struct TagInfo {
 struct OutputContext<'cx, Out> {
     string_buf: String,
     out: &'cx mut Out,
-    config: OutputConfig<'cx>,
+    config: &'cx OutputConfig<'cx>,
     indent_level: u32,
     element: &'cx Element<'cx>,
     follows_space: bool,
@@ -430,7 +430,7 @@ pub type OutputResult<T = ()> = Result<T, OutputError>;
 pub fn output_html_to(
     document: &Document,
     out: &mut impl Write,
-    config: OutputConfig,
+    config: &OutputConfig,
 ) -> OutputResult {
     let mut cx = OutputContext {
         string_buf: default(),
@@ -530,7 +530,7 @@ section {
     output_html_to(
         &Document::parse(src).unwrap(),
         &mut out,
-        OutputConfig {
+        &OutputConfig {
             indent: Some("  ".into()),
             ..default()
         },

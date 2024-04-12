@@ -74,6 +74,46 @@ article[lang=en-US] {
     Any reasonable, valid HTML should be representable in MinTyML.
   }
 
+  h2> Using MinTyML
+
+  h3> Demo
+
+  <(a[href=https://youngspe.github.io/mintyml]> Web-based demo )>
+
+  h3> Command-line interface
+
+  <(a[href=https://crates.io/crates/mintyml-cli]> mintyml-cli )>
+
+  The CLI is currently only available from Cargo: <`cargo install mintyml-cli`>
+
+  h3> Libraries
+
+  table {
+    thead>> <(th> Language)> <(th> Package)> <(th> Install)> <(th> Doc)>
+
+    {
+      Rust
+
+      <(a[href=https://crates.io/crates/mintyml]> mintyml )>
+
+      <`cargo add mintyml`>
+
+      <(a[href=https://docs.rs/mintyml/latest/mintyml/]> doc)>
+    }
+
+    {
+      JavaScript/TypeScript
+
+      <(a[href=https://npmjs.com/package/mintyml]> mintyml )>
+      (compatible with NodeJS or in the browser with WebPack)
+
+      <`npm install --save mintyml`>
+
+      >
+    }
+  }
+
+
   h2> Basic structure
 
   A MinTyML document is made up of <(i> nodes)> that correspond to HTML constructs.

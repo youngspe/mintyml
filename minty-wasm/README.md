@@ -7,7 +7,6 @@ is an alternative HTML syntax intended for writing documents.
 import { MintymlConverter } from 'mintyml'
 
 const converter = new MintymlConverter({
-
     xml: false, // default: false
     indent: 2, // default: null
     completePage: false, // default: false
@@ -15,9 +14,9 @@ const converter = new MintymlConverter({
 
 converter.convert(`\
 article {
-    
+    h1> Title
+
+    Hello, world!
 }
 `)
-
-converter
 ```

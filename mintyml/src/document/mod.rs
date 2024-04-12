@@ -13,8 +13,10 @@ use crate::{
     utils::{default, intersperse_with, join_display, try_extend, DisplayFn},
 };
 
+/// A value that can be made to outlive the `'static` lifetime, e.g. by copying all borrowed data.
 pub trait ToStatic {
     type Static: 'static;
+    /// Consumes `self` and returns an equivalent value that contains no borrowed data.
     fn to_static(self) -> Self::Static;
 }
 
@@ -54,6 +56,7 @@ where
     }
 }
 
+/// Represents a fully parsed MinTyML document.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Document<'src> {
@@ -71,23 +74,29 @@ impl<'src> ToStatic for Document<'src> {
     }
 }
 
+/// Represents some kind of whitespace that should be considered when converting to HTML.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Space {
+    /// Whitespace between elements on the same line.
     Inline,
+    /// Whitespace between lines of a paragraph.
     LineEnd,
+    /// Whitespace at the end of a paragraph.
     ParagraphEnd,
 }
 
+/// Represents plain text data.
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Text<'src> {
-    pub value: Cow<'src, str>,
+    pub value: Src<'src>,
     pub escape: bool,
     pub multiline: bool,
     pub raw: bool,
 }
 
+/// Represents a MinTyML node, which roughly corresponds to an HTML element.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Node<'src> {
@@ -95,12 +104,13 @@ pub struct Node<'src> {
     pub node_type: NodeType<'src>,
 }
 
+/// The internal data of a MinTyML node.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum NodeType<'src> {
     Element(Element<'src>),
     Text(Text<'src>),
-    Comment(Cow<'src, str>),
+    Comment(Src<'src>),
     Space(Space),
 }
 
@@ -156,26 +166,33 @@ impl<'src> ToStatic for NodeType<'src> {
     }
 }
 
+/// Represents the context in which child elements are defined.
+/// Used as a hint for element type inference as well as line breaks when producing "pretty" HTML.
 #[non_exhaustive]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ContentMode {
+    /// The element is defined with block syntax within a block.
     #[default]
     Block,
+    /// The element is defined as a line, line-block, or inline element, or within inline content.
     Inline,
 }
 
+/// A MinTyML node that produces an HTML element.
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Element<'src> {
     pub selector: Selector<'src>,
+    /// Child nodes of the element.
     pub nodes: Vec<Node<'src>>,
     pub kind: ElementKind,
+    /// If true, escape sequences within this element should be converted as-is.
     pub is_raw: bool,
     pub mode: ContentMode,
 }
 
 impl<'src> Element<'src> {
-    pub fn with_tag(tag: impl Into<Cow<'src, str>>) -> Self {
+    pub fn with_tag(tag: impl Into<Src<'src>>) -> Self {
         Self {
             selector: SelectorElement::Name(tag.into()).into(),
             ..default()
@@ -196,12 +213,17 @@ impl<'src> ToStatic for Element<'src> {
     }
 }
 
+/// Defines the type and attributes of an element.
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Selector<'src> {
+    /// The element's type (or _tag_).
     pub element: SelectorElement<'src>,
-    pub class_names: Vec<Cow<'src, str>>,
-    pub id: Option<Cow<'src, str>>,
+    /// The classes applied to the element.
+    pub class_names: Vec<Src<'src>>,
+    /// The ID of the element.
+    pub id: Option<Src<'src>>,
+    /// All other attributes of the element.
     pub attributes: Vec<Attribute<'src>>,
 }
 
@@ -228,11 +250,14 @@ impl<'src> From<SelectorElement<'src>> for Selector<'src> {
     }
 }
 
+pub(crate) type Src<'src> = Cow<'src, str>;
+
+/// Represents an HTML attribute of an element.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Attribute<'src> {
-    pub name: Cow<'src, str>,
-    pub value: Option<Cow<'src, str>>,
+    pub name: Src<'src>,
+    pub value: Option<Src<'src>>,
 }
 
 impl<'src> ToStatic for Attribute<'src> {
@@ -246,12 +271,16 @@ impl<'src> ToStatic for Attribute<'src> {
     }
 }
 
+/// A the part of a selector that defines the element type.
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum SelectorElement<'src> {
+    /// The type is unspecified and should be inferred.
     #[default]
     Infer,
-    Name(Cow<'src, str>),
+    /// The name of the type.
+    Name(Src<'src>),
+    /// The type of a special of element.
     Special(SpecialKind),
 }
 
@@ -266,33 +295,51 @@ impl<'src> ToStatic for SelectorElement<'src> {
     }
 }
 
+/// Describes the syntax used to define an element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ElementDelimiter {
+    /// Defined using line (`>`) syntax, or a paragraph.
     Line,
+    /// Defined using line-block (`> {}`)syntax.
     LineBlock,
+    /// Defined using block (`{}`) syntax.
     Block,
 }
 
+/// Describes how an element or paragraph is represented.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ElementKind {
+    /// An explicit single-line element.
     Line,
+    /// A multi-line element with the semantics of a line element.
     LineBlock,
     #[default]
+    /// A multi-line element.
     Block,
-    Inline(Option<ElementDelimiter>),
+    /// An element defined within a line element or paragraph
+    Inline(
+        /// The syntax used to define the element inside the inline delimiters
+        /// e.g. `<(b> text)>`, `<(b> { text })>`, `<(b { text })>`, `<(text)>`
+        Option<ElementDelimiter>
+    ),
+    /// An element implicitly defined by a group of consecutive lines of text.
+    /// Depending on inference, it may correspond to a text node rather than an HTML element.
     Paragraph,
 }
 
+/// Indicates some error occurred while building the tree.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 struct BuildError {}
 
+/// Represents a syntax error in the MinTyML source.
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "std", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
 pub struct SyntaxError {
+    /// The [LocationRange] encapsulating the syntax error.
     pub range: LocationRange,
     pub kind: SyntaxErrorKind,
 }
@@ -334,13 +381,17 @@ impl SyntaxError {
     }
 }
 
+/// Indicates what caused a syntax error.
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SyntaxErrorKind {
+    /// An unknown error occurred.
     #[default]
     Unknown,
+    /// An invalid escape sequence was found.
     #[non_exhaustive]
     InvalidEscape {},
+    /// The document could not be parsed into an abstract syntax tree.
     #[non_exhaustive]
     ParseFailed {
         expected: Vec<gramma::error::ExpectedParse>,
@@ -369,29 +420,36 @@ impl From<ParseError<'_>> for SyntaxError {
     }
 }
 
+/// An object that holds relevant state and resources for building a document.
 #[derive(Debug)]
 struct BuildContext<'src> {
+    /// The MinTyML source string.
     pub src: &'src str,
+    /// All syntax errors found while building so far.
     pub errors: Vec<SyntaxError>,
 }
 
 impl<'src> BuildContext<'src> {
-    fn slice(&self, range: LocationRange) -> Cow<'src, str> {
+    /// Extracts a slice of the source.
+    fn slice(&self, range: LocationRange) -> Src<'src> {
         slice_str(self.src, range)
     }
 
-    fn escapable_slice(&mut self, range: LocationRange) -> BuildResult<Cow<'src, str>> {
+    /// Extracts a slice of the source, validating any escape sequences within.
+    fn escapable_slice(&mut self, range: LocationRange) -> BuildResult<Src<'src>> {
         let slice = self.slice(range);
         self.record_errors(escape_errors(&slice, range.start))
             .map(|()| slice)
     }
 
+    /// Adds the given errors to the context.
+    /// Returns `Err(_)` if `errors` contained at least one value.
     fn record_errors<E: Into<SyntaxError>>(
         &mut self,
-        iter: impl IntoIterator<Item = E>,
+        errors: impl IntoIterator<Item = E>,
     ) -> BuildResult<()> {
         let pre_len = self.errors.len();
-        self.errors.extend(iter.into_iter().map(Into::into));
+        self.errors.extend(errors.into_iter().map(Into::into));
         if self.errors.len() == pre_len {
             Ok(())
         } else {
@@ -400,7 +458,8 @@ impl<'src> BuildContext<'src> {
     }
 }
 
-fn slice_str<'src>(src: &'src str, LocationRange { start, end }: LocationRange) -> Cow<'src, str> {
+/// Extracts a slice of a string given a [LocationRange].
+fn slice_str<'src>(src: &'src str, LocationRange { start, end }: LocationRange) -> Src<'src> {
     src.get(start.position..end.position)
         .unwrap_or_default()
         .into()
@@ -425,6 +484,7 @@ impl<'src> Document<'src> {
         })
     }
 
+    /// Converts an abstract syntax tree to a document.
     pub fn from_ast(src: &'src str, ast: &ast::Document) -> Result<Self, Vec<SyntaxError>> {
         let mut cx = BuildContext {
             src,
@@ -433,6 +493,7 @@ impl<'src> Document<'src> {
         Self::build_from_ast(&mut cx, &ast).map_err(|_| cx.errors)
     }
 
+    /// Parses a document from a MinTyML source string.
     pub fn parse(src: &'src str) -> Result<Self, Vec<SyntaxError>> {
         let ast = parse_tree::<ast::Document, 4>(src).map_err(|e| vec![e.into()])?;
         Self::from_ast(src, &ast)
@@ -495,6 +556,7 @@ impl<'src> Selector<'src> {
     }
 }
 
+/// Given a [ast::TextLine], push all nodes on the line to `out`.
 fn build_text_line<'src>(
     cx: &mut BuildContext<'src>,
     line: &ast::TextLine,
@@ -521,6 +583,7 @@ fn build_text_line<'src>(
     try_extend(out, nodes)
 }
 
+/// Builds a node from the multiline text in a given range.
 fn get_multiline_text<'src, const ESCAPE: bool>(
     cx: &mut BuildContext<'src>,
     range: LocationRange,
@@ -543,6 +606,7 @@ fn get_multiline_text<'src, const ESCAPE: bool>(
     })
 }
 
+/// Builds a node from a [ast::Multiline].
 fn build_multiline<'src>(
     cx: &mut BuildContext<'src>,
     multiline: &ast::Multiline,
@@ -553,6 +617,7 @@ fn build_multiline<'src>(
     }
 }
 
+/// Builds node contents from a [ast::MultilineCode].
 fn build_multiline_code<'src>(
     cx: &mut BuildContext<'src>,
     multiline: &ast::MultilineCode,
@@ -613,15 +678,23 @@ fn build_verbatim_text<'src>(
     .into())
 }
 
+/// The type of a special element.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SpecialKind {
+    /// `em>`
     Emphasis,
+    /// `strong>`
     Strong,
+    /// `u>`
     Underline,
+    /// `s>`
     Strike,
+    /// `q>`
     Quote,
+    /// `code>`
     Code,
+    /// `pre>code>`
     CodeBlockContainer,
 }
 
@@ -683,6 +756,7 @@ fn build_inline_special<'src>(
     .map(|node_type| Node { range, node_type })
 }
 
+/// Determines the syntax used to define an element.
 fn get_delimiter(body: &ast::ElementBody) -> ElementDelimiter {
     match body {
         ast::ElementBody::Block { .. } => ElementDelimiter::Block,
@@ -691,10 +765,17 @@ fn get_delimiter(body: &ast::ElementBody) -> ElementDelimiter {
     }
 }
 
+/// Builds a node that represents a portion of a line.
+///
+/// This could be:
+/// - plain text
+/// - verbatim text
+/// - an inline element
+/// - a comment
 fn build_text_line_part<'src>(
     part: &ast::TextLinePart,
     cx: &mut BuildContext<'src>,
-) -> Result<Node<'src>, BuildError> {
+) -> BuildResult<Node<'src>> {
     use ast::TextLinePart::*;
     match part {
         NonParagraph { node } => Ok(Node {
@@ -845,6 +926,7 @@ fn build_element<'src>(
     }
 }
 
+/// Returns the [ElementKind] that most closely matches the given [ast::ElementBody].
 fn get_default_kind(body: &ast::ElementBody) -> ElementKind {
     match body {
         ast::ElementBody::Block { .. } => ElementKind::Block,
@@ -865,6 +947,7 @@ fn build_non_paragraph_node<'src>(
     }
 }
 
+/// Builds a list of nodes from a collection of [ast::Node].
 fn nodes_from_ast<'src, 'ast>(
     cx: &mut BuildContext<'src>,
     ast: impl IntoIterator<Item = &'ast ast::Node>,
@@ -898,7 +981,7 @@ fn nodes_from_ast<'src, 'ast>(
 }
 
 #[test]
-fn ir_demo() {
+fn document_demo() {
     let src = r#"
         section {
             h1#foo.bar[

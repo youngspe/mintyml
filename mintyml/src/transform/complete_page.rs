@@ -10,6 +10,7 @@ use crate::{
 /// Tags that generally belong in a `<head>` element.
 const METADATA_TAGS: &[&str] = &["base", "link", "meta", "title", "style"];
 
+/// If `node` is an element whose tag is contained in `tags`, returns a reference to the [Element] value.
 fn extract_element_with_tag_in<'node, 'src, I: Iterator + Clone>(
     node: &'node mut Node<'src>,
     tags: impl IntoIterator<IntoIter = I>,
@@ -34,6 +35,7 @@ where
     }
 }
 
+/// Determines whether `node` is an element whose tag is contained in `tags`.
 fn has_tag_in<'node, 'src, I: Iterator + Clone>(
     node: &'node mut Node<'src>,
     tags: impl IntoIterator<IntoIter = I>,
@@ -46,26 +48,12 @@ where
 
 /// Transforms `doc` so that its nodes are wrapped in `<html>` tags with a `<head>` and `<body>`
 pub fn complete_page<'src>(doc: &mut Document<'src>, config: &OutputConfig<'src>) {
-    if let Some(root) = doc
+    if  doc
         .nodes
         .iter_mut()
-        .find_map(|n| extract_element_with_tag_in(n, ["html"]))
+        .any(|n| has_tag_in(n, ["html"]))
     {
         // There's already an <html> tag so no need to restructure.
-        if let Some(lang) = config.lang.as_ref() {
-            if !root
-                .selector
-                .attributes
-                .iter()
-                .any(|attr| attr.name == "lang")
-            {
-                root.selector.attributes.push(Attribute {
-                    name: "lang".into(),
-                    value: Some(lang.clone()),
-                })
-            }
-        }
-
         return;
     }
 

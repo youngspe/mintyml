@@ -7,6 +7,32 @@
   <li>Writing documents without complex formatting or interactivity should not require strong knowledge of HTML.</li>
   <li>Any reasonable, valid HTML should be representable in MinTyML.</li>
 </ol>
+<h2>Using MinTyML</h2>
+<h3>Demo</h3>
+<p><a href="https://youngspe.github.io/mintyml">Web-based demo</a></p>
+<h3>Command-line interface</h3>
+<p><a href="https://crates.io/crates/mintyml-cli">mintyml-cli</a></p>
+<p>The CLI is currently only available from Cargo: <code>cargo install mintyml-cli</code></p>
+<h3>Libraries</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Language</th> <th>Package</th> <th>Install</th> <th>Doc</th>
+    </tr>
+  </thead>
+  <tr>
+    <td>Rust</td>
+    <td><a href="https://crates.io/crates/mintyml">mintyml</a></td>
+    <td><code>cargo add mintyml</code></td>
+    <td><a href="https://docs.rs/mintyml/latest/mintyml/">doc</a></td>
+  </tr>
+  <tr>
+    <td>JavaScript/TypeScript</td>
+    <td><a href="https://npmjs.com/package/mintyml">mintyml</a> (compatible with NodeJS or in the browser with WebPack)</td>
+    <td><code>npm install --save mintyml</code></td>
+    <td></td>
+  </tr>
+</table>
 <h2>Basic structure</h2>
 <p>A MinTyML document is made up of <i>nodes</i> that correspond to HTML constructs.</p>
 <h3>Paragraph</h3>

@@ -1,44 +1,38 @@
 use alloc::{boxed::Box, vec::Vec};
-use gramma::{
-    parse::{Location, LocationRange},
-    string_matcher::{IntoMatchString, StringPattern},
-    string_pattern,
-};
+use gramma::parse::{Location, LocationRange};
 
-fn unicode_escape() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(exactly("\\u{") + repeat(.., !char(('\n', '{', '}'))).simple() + exactly("}"))
-}
+gramma::define_string_pattern!(
+    fn unicode_escape() {
+        exactly("\\u{") + repeat(.., !char(('\n', '{', '}'))).simple() + exactly("}")
+    }
 
-fn escape() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(unicode_escape() | char('\\') + char(..))
-}
+    fn escape() {
+        unicode_escape() | char('\\') + char(..)
+    }
 
-fn identifier_char() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(char((ascii_alphanumeric(), "-:")) | escape())
-}
+    fn identifier_char() {
+        char((ascii_alphanumeric(), "-:")) | escape()
+    }
 
-fn identifier() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(identifier_char().repeat(1..).simple())
-}
+    fn identifier() {
+        identifier_char().repeat(1..).simple()
+    }
 
-fn class_name() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(
+    fn class_name() {
         (identifier_char() | char("!@$%^&*+=_/?();") + !precedes(char('>')))
             .repeat(1..)
             .simple()
-    )
-}
+    }
 
-fn attr_string() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(
+    fn attr_string() {
         char('\'') + (!char(('\\', '\'')) | escape()).repeat(1..).simple() + char('\'')
             | char('"') + (!char(('\\', '"')) | escape()).repeat(1..).simple() + char('"')
-    )
-}
+    }
 
-fn element_name() -> StringPattern<impl IntoMatchString> {
-    string_pattern!(!precedes(ascii_digit()) + identifier())
-}
+    fn element_name() {
+        !precedes(ascii_digit()) + identifier()
+    }
+);
 
 gramma::define_token!(
     #[pattern(exact = ">")]
@@ -73,6 +67,7 @@ gramma::define_token!(
     pub struct Ident;
     #[pattern(matcher = class_name())]
     pub struct ClassName;
+
     #[pattern(matcher = {
         precedes(!whitespace())
         + (
@@ -84,11 +79,13 @@ gramma::define_token!(
             ).repeat(1..).simple()
         ).repeat(1..).simple()
     })]
+    /// Matches any part of a paragraph line that is not an element.
     pub struct TextSegment;
 
     #[pattern(matcher = {
         exactly("```") | exactly(r#"""""#) | exactly("'''")
     })]
+    /// Fail if TextSegment matches this so it doesn't match multiline elements.
     pub struct InvalidTextSegment;
 
     #[pattern(matcher = {
@@ -105,10 +102,13 @@ gramma::define_token!(
     pub struct Whitespace;
 
     #[pattern(matcher = {
+        // Element type
         (char('*') | element_name()).optional().simple()
          +(
+            // Id/class
             char(".#").repeat(1..).simple() + class_name()
-            | char('[') + (!char("[]\\\"'") | attr_string() | escape()).repeat(..).simple()  + char(']')
+            // Attribute
+            | char('[') + (!char("[]\\\"'") | attr_string() | escape()).repeat(..).simple() + char(']')
         ).repeat(..)
     })]
     pub struct SelectorString;
