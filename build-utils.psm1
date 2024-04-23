@@ -221,7 +221,8 @@ function Sync-Changes([WSState] $State, [switch] $Publish) {
 
 function Build-Release {
     [CmdletBinding()]
-    param ([string] $Version)
+    param ($Version = $null)
+    $Version ??= Get-Version
 
     $targets = Get-Content "$WSRoot/release-targets.txt" `
     | ForEach-Object Trim `
@@ -263,7 +264,7 @@ function Build-Release {
 
 function Publish-Release {
     [CmdletBinding()]
-    param([string] $Version, [switch] $Publish)
+    param($Version = $null, [switch] $Publish)
     $Version ??= Get-Version
     $tagName = "v$($State.NewVersion)"
     gh release view $tagName *> $null
