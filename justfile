@@ -57,6 +57,11 @@ publish-release:
     Import-Module ./build-utils.psm1
     Publish-Release -Publish
 
+build-release:
+    #!/usr/bin/env pwsh
+    Import-Module ./build-utils.psm1
+    Build-Release
+
 act *ARGS:
     #!/usr/bin/env sh
     repo=$(git remote get-url origin | sed -E 's:^.*\W(\w+/\w+)\.git$:\1:')

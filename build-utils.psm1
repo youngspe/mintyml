@@ -215,7 +215,7 @@ function Build-Release {
     | ForEach-Object Trim `
     | Where-Object { $_ -and $_ -notlike '#*' }
 
-    [List[ErrorRecord]] $Errors = @()
+    [List[Exception]] $Errors = @()
 
     $outDir = "$WSRoot/target-release"
 
@@ -240,12 +240,12 @@ function Build-Release {
         }
         catch {
             Write-Host "::error::Target '$target' Failed: $_"
-            $Errors.Add($_)
+            $Errors.Add($_.Exception)
         }
     } | Write-Host
 
     if ($Errors) {
-        throw [AggregateException]::new(($buildOut.Errors | ForEach-Object Exception))
+        throw [AggregateException]::new($Errors)
     }
 }
 
