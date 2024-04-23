@@ -17,6 +17,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: "publish"
+  cancel-in-progress: false
+
 jobs:
   get-changes:
     runs-on: ubuntu-latest
@@ -50,38 +54,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: "20"
-
-    # - run: |
-    #     echo "~/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Rust cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: Get npm cache directory
-      id: npm-cache-dir
-      run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-
-    - uses: actions/cache@v3
-      with:
-        path: ${{ steps.npm-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-
-    - uses: taiki-e/install-action@just
+    - uses: ./.github/actions/setup
 
     - name: Test mintyml crate
       if: env.update_core
@@ -92,3 +65,30 @@ jobs:
       if: env.update_core || env.update_cli
       run: |
         just test-core
+
+  publish-packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    needs: on-push
+    environment:
+      name: package-managers
+    steps:
+    - uses: actions/checkout@v4
+    - uses: ./.github/actions/setup
+    - name: Setup Git User
+      env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+      run: |
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        gh auth setup-git
+
+    - uses: taiki-e/install-action@cross
+
+    - run: just publish-packages
+      env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

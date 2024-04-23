@@ -3,8 +3,14 @@ set fallback
 @default:
     just --list
 
+init-package:
+    cp package.template.json package.json
+
 install:
     npm install
+
+set-version VERSION:
+    npm version "{{ VERSION }}"
 
 wasm-pack *ARGS:
     wasm-pack build --no-pack {{ ARGS }}

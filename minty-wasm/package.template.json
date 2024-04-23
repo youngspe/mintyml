@@ -1,6 +1,6 @@
 {
   "name": "mintyml",
-  "version": "0.1.6",
+  "version": "{{VERSION}}",
   "description": "A minimalist alternative syntax to HTML",
   "main": "out-js/index.js",
   "repository": {

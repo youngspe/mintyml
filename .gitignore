@@ -1,6 +1,5 @@
-/target
+/target*
 */target
-/Cargo.lock
 */Cargo.lock
 node_modules
 **/node_modules/**/*

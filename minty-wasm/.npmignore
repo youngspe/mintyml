@@ -3,3 +3,4 @@
 target
 Cargo.toml
 tsconfig.json
+/package.template.json
