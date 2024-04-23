@@ -265,8 +265,10 @@ function Build-Release {
 function Publish-Release {
     [CmdletBinding()]
     param($Version = $null, [switch] $Publish)
-    $Version ??= Get-Version
-    $tagName = "v$($State.NewVersion)"
+    if (-not $Version) {
+        $Version = Get-Version
+    }
+    $tagName = "v$Version"
     gh release view $tagName *> $null
     if ($?) {
         Write-Host "::notice title=Skipping release::Release $tagName already exists"
