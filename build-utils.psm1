@@ -197,12 +197,16 @@ function Sync-Changes([WSState] $State, [switch] $Publish) {
     $dryRun = $Publish ? @() : @('--dry-run')
 
     if ($State.OldTag) {
+        Write-Host "Committing version bump..."
         Test-ExitCode git add .
         Test-ExitCode git commit -m "Increment to $tagName"
         Test-ExitCode git pull --rebase --strategy-option=theirs
+        Write-Host "Pushing version bump...."
         Test-ExitCode git push @dryRun
     }
+    Write-Host "Making tag..."
     Test-ExitCode git tag --force $tagName -m ""
+    Write-Host "Pushing tag..."
     Test-ExitCode git push @dryRun origin "refs/tags/$tagName"
 }
 
@@ -219,6 +223,7 @@ function Build-Release([WSState] $State) {
 
     foreach ($target in $State.Targets) {
         try {
+            Write-Host "Building $target ..."
             Test-ExitCode rustup target add $target
             Test-ExitCode cross build -q --release -p mintyml-cli --target $target
 
@@ -229,6 +234,7 @@ function Build-Release([WSState] $State) {
             $outName = "mintyml-cli-$target-v$version"
 
             New-Item -ItemType Directory -Force $outName
+            Copy-Item -Path $file -Destination '$WSRoot/target-release/$outName/'
 
             Test-ExitCode tar -czf "$WSRoot/target-release/$outName.tgz" `
                 -C "$WSRoot/target-release/" $outName
@@ -241,11 +247,13 @@ function Build-Release([WSState] $State) {
 
 function Publish-Release([WSState] $State) {
     if ("minty-cli" -notin $State.Packages) {
+        Write-Host "::notice title=Skipping release::minty-cli was not updated"
         return
     }
 
     $tagName = "v$($State.NewVersion)"
     $assets = Get-ChildItem "target-release/*.tgz" | ForEach-Object FullName
+    Write-Host "Creating release..."
     Test-ExitCode gh release create $tagName @assets
 }
 
