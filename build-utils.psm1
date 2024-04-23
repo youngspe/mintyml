@@ -147,26 +147,35 @@ function Publish-Packages([switch] $Publish) {
     $successCount = 0
 
     if ("mintyml" -in $State.Packages) {
+        Write-Host "Publishing mintyml..."
         try {
             Test-ExitCode cargo publish -q -p mintyml @dryRun --allow-dirty
             $successCount += 1
         }
         catch {
-            Write-Host "::error::mintyml failed to publish"
+            Write-Host "::notice::mintyml failed to publish"
         }
+    }
+    else {
+        Write-Host "Skipping mintyml"
     }
 
     if ("minty-cli" -in $State.Packages) {
+        Write-Host "Publishing minty-cli..."
         try {
             Test-ExitCode cargo publish -q -p mintyml-cli @dryRun --allow-dirty
             $successCount += 1
         }
         catch {
-            Write-Host "::error::minty-cli failed to publish"
+            Write-Host "::notice::minty-cli failed to publish"
         }
+    }
+    else {
+        Write-Host "Skipping minty-cli"
     }
 
     if ("minty-wasm" -in $State.Packages) {
+        Write-Host "Publishing minty-wasm..."
         just -f "$WSRoot/justfile" build-node
         Push-Location "$WSRoot/minty-wasm"
         try {
@@ -175,11 +184,14 @@ function Publish-Packages([switch] $Publish) {
             $successCount += 1
         }
         catch {
-            Write-Host "::error::minty-wasm failed to publish"
+            Write-Host "::notice::minty-wasm failed to publish"
         }
         finally {
             Pop-Location
         }
+    }
+    else {
+        Write-Host "Skipping minty-wasm"
     }
 
     if ($successCount -eq 0) {
