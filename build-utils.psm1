@@ -196,11 +196,13 @@ function Sync-Changes([WSState] $State, [switch] $Publish) {
     $tagName = "v$($State.NewVersion)"
     $dryRun = $Publish ? @() : @('--dry-run')
 
-    Test-ExitCode git add .
-    Test-ExitCode git commit -m "Increment to $tagName"
-    Test-ExitCode git pull --rebase --strategy-option=theirs
+    if ($State.OldTag) {
+        Test-ExitCode git add .
+        Test-ExitCode git commit -m "Increment to $tagName"
+        Test-ExitCode git pull --rebase --strategy-option=theirs
+        Test-ExitCode git push @dryRun
+    }
     Test-ExitCode git tag --force $tagName -m ""
-    Test-ExitCode git push @dryRun
     Test-ExitCode git push @dryRun origin "refs/tags/$tagName"
 }
 
@@ -222,7 +224,7 @@ function Build-Release([WSState] $State) {
 
             $file = Get-ChildItem `
                 "$WSRoot/target/$target/release/mintyml-cli*" `
-                -File -Include 'mintyml-cli','mintyml-cli.exe'
+                -File -Include 'mintyml-cli', 'mintyml-cli.exe'
 
             $outName = "mintyml-cli-$target-v$version"
 
