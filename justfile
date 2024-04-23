@@ -49,9 +49,13 @@ build-cli:
 
 publish-packages:
     #!/usr/bin/env pwsh
-    $ErrorActionPreference = 'Stop'
     Import-Module ./build-utils.psm1
     Publish-Packages -Publish
+
+publish-release:
+    #!/usr/bin/env pwsh
+    Import-Module ./build-utils.psm1
+    Publish-Release -Publish
 
 act *ARGS:
     #!/usr/bin/env sh

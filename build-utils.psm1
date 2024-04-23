@@ -1,3 +1,4 @@
+using namespace System
 using namespace System.Collections.Generic
 $ErrorActionPreference = 'Stop'
 $WSRoot = $PSScriptRoot
@@ -186,10 +187,6 @@ function Publish-Packages([switch] $Publish) {
     }
 
     Sync-Changes $State
-    Build-Release $State
-    if ($Publish) {
-        Publish-Release $State
-    }
 }
 
 function Sync-Changes([WSState] $State, [switch] $Publish) {
@@ -210,18 +207,20 @@ function Sync-Changes([WSState] $State, [switch] $Publish) {
     Test-ExitCode git push @dryRun origin "refs/tags/$tagName"
 }
 
-function Build-Release([WSState] $State) {
-    if ("minty-cli" -notin $State.Packages) {
-        return
-    }
+function Build-Release {
+    [CmdletBinding()]
+    param ([string] $Version)
 
-    $State.Targets = Get-Content "$WSRoot/release-targets.txt" `
+    $targets = Get-Content "$WSRoot/release-targets.txt" `
     | ForEach-Object Trim `
     | Where-Object { $_ -and $_ -notlike '#*' }
 
-    $version = $State.NewVersion
+    [List[ErrorRecord]] $Errors = @()
 
-    foreach ($target in $State.Targets) {
+    $outDir = "$WSRoot/target-release"
+
+    $targets | ForEach-Object {
+        $target = $_
         try {
             Write-Host "Building $target ..."
             Test-ExitCode rustup target add $target
@@ -231,30 +230,43 @@ function Build-Release([WSState] $State) {
                 "$WSRoot/target/$target/release/mintyml-cli*" `
                 -File -Include 'mintyml-cli', 'mintyml-cli.exe'
 
-            $outName = "mintyml-cli-$target-v$version"
+            $outName = "mintyml-cli-$target-v$Version"
 
-            New-Item -ItemType Directory -Force $outName
-            Copy-Item -Path $file -Destination '$WSRoot/target-release/$outName/'
+            New-Item -ItemType Directory -Force "$outDir/$outName" > $null
+            Copy-Item -Path $file -Destination "$outDir/$outName/"
 
-            Test-ExitCode tar -czf "$WSRoot/target-release/$outName.tgz" `
-                -C "$WSRoot/target-release/" $outName
+            Test-ExitCode tar -czf "$outDir/$outName.tgz" `
+                -C $outDir $outName
         }
         catch {
             Write-Host "::error::Target '$target' Failed: $_"
+            $Errors.Add($_)
         }
+    } | Write-Host
+
+    if ($Errors) {
+        throw [AggregateException]::new(($buildOut.Errors | ForEach-Object Exception))
     }
 }
 
-function Publish-Release([WSState] $State) {
-    if ("minty-cli" -notin $State.Packages) {
-        Write-Host "::notice title=Skipping release::minty-cli was not updated"
+function Publish-Release {
+    [CmdletBinding()]
+    param([string] $Version, [switch] $Publish)
+    $Version ??= Get-Version
+    $tagName = "v$($State.NewVersion)"
+    gh release view $tagName *> $null
+    if ($?) {
+        Write-Host "::notice title=Skipping release::Release $tagName already exists"
         return
     }
 
-    $tagName = "v$($State.NewVersion)"
-    $assets = Get-ChildItem "target-release/*.tgz" | ForEach-Object FullName
-    Write-Host "Creating release..."
-    Test-ExitCode gh release create $tagName @assets
+    Build-Release $Version
+
+    if ($Publish) {
+        $assets = Get-ChildItem "$WSRoot/target-release/*.tgz" | ForEach-Object FullName
+        Write-Host "Creating release..."
+        Test-ExitCode gh release create --latest $tagName @assets
+    }
 }
 
-Export-ModuleMember Publish-Packages, Build-NodeManifest
+Export-ModuleMember Publish-Packages, Build-NodeManifest, Build-Release, Publish-Release

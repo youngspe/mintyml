@@ -70,7 +70,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     needs: on-push
     environment:
       name: package-managers
@@ -85,8 +84,7 @@ jobs:
         git config user.name "github-actions[bot]"
         gh auth setup-git
 
-    - uses: taiki-e/install-action@cross
-    - name: Publish
+    - name: Publish Packages
       env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -94,3 +92,11 @@ jobs:
       run: |
         npm config -g set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
         just publish-packages
+
+    - uses: taiki-e/install-action@cross
+
+    - name: Publish Release
+      env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+      run: |
+        just publish-release
