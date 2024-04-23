@@ -86,9 +86,11 @@ jobs:
         gh auth setup-git
 
     - uses: taiki-e/install-action@cross
-
-    - run: just publish-packages
+    - name: Publish
       env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: |
+        npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
+        just publish-packages
