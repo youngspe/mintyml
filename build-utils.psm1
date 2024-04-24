@@ -70,7 +70,9 @@ class WSState {
 
 function Get-NewVersion([WSState] $State) {
     $oldVersion = Get-Version
-    $State.OldTag = git show-ref -s --tags "v$oldVersion"
+
+    $State.OldTag = git fetch --quiet --tags origin "v$oldVersion" `
+        && git show-ref -s --tags "v$oldVersion"
 
     if ($State.OldTag) {
         $State.NewVersion = Get-VersionIncrement
