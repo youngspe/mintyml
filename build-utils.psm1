@@ -203,25 +203,24 @@ function Publish-Packages([switch] $Publish) {
         return
     }
 
-    Sync-Changes $State
+    Sync-Changes -TagName "v$($State.NewVersion)" -Bump ([bool]$State.OldTag)  -Publish:$Publish
 }
 
-function Sync-Changes([WSState] $State, [switch] $Publish) {
-    $tagName = "v$($State.NewVersion)"
+function Sync-Changes([string] $TagName, [bool] $Bump, [switch] $Publish) {
     $dryRun = $Publish ? @() : @('--dry-run')
 
-    if ($State.OldTag) {
+    if ($Bump) {
         Write-Host "Committing version bump..."
         Test-ExitCode git add .
-        Test-ExitCode git commit -m "Increment to $tagName"
+        Test-ExitCode git commit -m "Increment to $TagName"
         Test-ExitCode git pull --rebase --strategy-option=theirs
         Write-Host "Pushing version bump...."
         Test-ExitCode git push @dryRun
     }
     Write-Host "Making tag..."
-    Test-ExitCode git tag --force $tagName -m ""
+    Test-ExitCode git tag --force $TagName -m ""
     Write-Host "Pushing tag..."
-    Test-ExitCode git push @dryRun origin "refs/tags/$tagName"
+    Test-ExitCode git push @dryRun origin "refs/tags/$TagName"
 }
 
 function Build-Release {
@@ -285,8 +284,9 @@ function Publish-Release {
     if ($Publish) {
         $assets = Get-ChildItem "$WSRoot/target-release/*.tgz" | ForEach-Object FullName
         Write-Host "Creating release..."
-        Test-ExitCode gh release create --latest --verify-tag=false $tagName @assets
+        Test-ExitCode gh release create --latest $tagName @assets
     }
 }
 
-Export-ModuleMember Publish-Packages, Build-NodeManifest, Build-Release, Publish-Release
+Export-ModuleMember Publish-Packages, Build-NodeManifest, Build-Release, Publish-Release, Sync-Changes
+
