@@ -48,19 +48,29 @@ build-cli:
     cargo build -q --release --manifest-path minty-cli/Cargo.toml
 
 publish-packages:
-    #!/usr/bin/env pwsh
-    Import-Module ./build-utils.psm1
-    Publish-Packages -Publish
+    pwsh -c ' \
+    Import-Module ./build-utils.psm1; \
+    Publish-Packages -Publish; \
+    '
 
 publish-release:
-    #!/usr/bin/env pwsh
-    Import-Module ./build-utils.psm1
-    Publish-Release -Publish
+    pwsh -c ' \
+    Import-Module ./build-utils.psm1; \
+    Publish-Release -Publish; \
+    '
 
 build-release:
-    #!/usr/bin/env pwsh
-    Import-Module ./build-utils.psm1
-    Build-Release
+    pwsh -c ' \
+    Import-Module ./build-utils.psm1; \
+    Build-Release;
+    '
+
+update-readme:
+    pwsh -c ' \
+    Import-Module ./doc-utils.psm1; \
+    Build-ReadmeDotMd; \
+    Build-ExampleIntro; \
+    '
 
 act *ARGS:
     #!/usr/bin/env sh

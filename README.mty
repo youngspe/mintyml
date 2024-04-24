@@ -1,0 +1,1297 @@
+h2> What is MinTyML?
+
+MinTyML (from <(dfn> <_Min_>imalist H<_TML_>)>)
+is an alternative HTML syntax intended for writing documents.
+
+h3> Principles
+
+This markup language is designed with the following principles in mind:
+
+ol {
+  Structure and formatting should be as concise as possible so the writer can
+  focus on the text.
+
+  Writing documents without complex formatting or interactivity should not require
+  strong knowledge of HTML.
+
+  Any reasonable, valid HTML should be representable in MinTyML.
+}
+
+h2> Using MinTyML
+
+h3> Demo
+
+<(a[href=https://youngspe.github.io/mintyml]> Web-based demo )>
+
+h3> Command-line interface
+
+<(a[href=https://crates.io/crates/mintyml-cli]> mintyml-cli )>
+
+The CLI is currently only available from Cargo: <`cargo install mintyml-cli`>
+
+h3> Libraries
+
+table {
+  thead>> <(th> Language)> <(th> Package)> <(th> Install)> <(th> Doc)>
+
+  {
+    Rust
+
+    <(a[href=https://crates.io/crates/mintyml]> mintyml )>
+
+    <`cargo add mintyml`>
+
+    <(a[href=https://docs.rs/mintyml/latest/mintyml/]> doc)>
+  }
+
+  {
+    JavaScript/TypeScript
+
+    <(a[href=https://npmjs.com/package/mintyml]> mintyml )>
+    (compatible with NodeJS or in the browser with WebPack)
+
+    <`npm install --save mintyml`>
+
+    >
+  }
+}
+
+
+h2> Basic structure
+
+A MinTyML document is made up of <(i> nodes)> that correspond to HTML constructs.
+
+h3> Paragraph
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    > ```
+    Lorem ipsum dolor sit amet,
+    consectetur adipiscing elit.
+
+    Sed do eiusmod tempor incididunt
+    ut labore et dolore magna aliqua.
+    ```
+
+    {
+      Lorem ipsum dolor sit amet,
+      consectetur adipiscing elit.
+
+      Sed do eiusmod tempor incididunt
+      ut labore et dolore magna aliqua.
+    }
+  }
+  caption> Paragraphs separated by empty lines.
+}
+
+The simplest node is the <(i> paragraph)>.
+A paragraph is made up of one or more consecutive lines of plain text.
+Paragraphs are separated from each other by empty lines and cannot be nested
+inside other paragraphs.
+
+h3> Selector
+
+Some elements may include a <(i> selector)>, which describes the type and
+attributes of the element. It's syntactically very similar to a CSS selector.
+
+A selector is made up of the following components (each of which is optional):
+
+dl {
+  > tag name
+
+  Indicates the type of the element, and must be placed at the beginning of the selector.
+  For example, <`a`> to create a link (also called an <(i> anchor)>).
+  A wildcard (<`*`>) is the same as not including a tag name at all,
+  which signals that the element type should be inferred from context.
+
+  > class
+
+  A class name, preceded by a dot (<`.`>).
+  Classes are used by CSS to apply styles to certain elements.
+  For example, <`.external`>, which one might use to indicate a link
+  points to another domain.
+  A selector can have multiple classes like so: <`.class1.class2`>
+
+  > id
+
+  An identifier for this specific element, preceded by a hash <`#`>.
+  For example, <`#example-link`>.
+  No element should have the same ID as another within the same document.
+  Can be used by CSS to style a specific element.
+
+  > attribute
+
+  One or more HTML attributes that provide more information about the element,
+  surrounded by brackets (<`[ ]`>).
+  For example, <`[href=http://example.com/]`>
+  sets the destination of a link.
+  Multiple attributes are separated by a space.
+  If an attribute value contains a space or a closing bracket,
+  it can be surrounded by single quotes (<(code> ' ')>) or double quotes (<`" "`>).
+  For example, <`[href=http://example.com/ title='Example site']`>
+}
+
+Putting all of the components together to form a selector might look like this:
+```
+a#example-link.external[href=http://example.com/ title='Example site']
+```
+
+The above selector describes a link that:
+ul {
+  Has the unique identifier <`example-link`>.
+
+  Is given the <`external`> class.
+
+  Points to <`http://example.com/`>.
+
+  Has the title <"Example site">.
+}
+
+Most elements' selectors will not be nearly as complex as this.
+In fact, many elements will not need a selector at all.
+
+Multiple selectors can be chained, separated by <`>`> to nest elements together.
+
+For example, <`header>h2>`> describes a <`header`> element with a level 2 heading inside.
+This can also be used to compose elements with inferred types:
+ul {
+  <`>img[src=/icon.png]>`>, when used within a section context describes a paragraph containing a single image.
+
+  <`section>*>`> or simply <`section>>`>
+  describes a section with a single paragraph element.
+}
+
+h3> Element
+
+Elements are components of a document that have a distinct purpose
+and translate directly to an HTML element.
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    > ```
+    This is
+    a paragraph.
+    footer> This footer is outside the paragraph.
+    ```
+    {
+      This is
+      a paragraph.
+      footer> This footer is outside the paragraph.
+    }
+  }
+  caption> If an element directly follows a paragraph, the paragraph ends and does not include the element.
+}
+
+Some common element types (or <(i> tag names)>)
+that might be used in a text-centric document are:
+dl {
+  > <`p`> (<(dfn> paragraph)>)
+
+  A block of related text.
+  Block elements that contain section content will automatically encapsulate
+  chunks of text in this element.
+
+  > <`h1`>, <`h2`>, <`h3`>, <`h4`>, <`h5`>, and <`h6`>
+  (<(dfn> heading levels 1-6)>)
+
+  Headings implicitly organize the document into
+  sections and subsections based on the heading level.
+
+  > <`ul`> (<(dfn> unordered list)>)
+  and <`ol`> (<(dfn> ordered list)>)
+
+  Bulleted and numbered lists, respectively.
+  Any paragraph or element contained within that doesn't
+  specify a type will be inferred as <`li`> (<(dfn> list item)>).
+    See <(a[href=#List-Inference]> list inference)>.
+
+  > <`table`>
+
+  {
+    Displays data in a grid.
+    The most basic table is made up of <`tr`> (<(<(dfn>table row)>)>) elements.
+    Each row contains one or more cells of type
+    <`th`> (<(dfn> table header)>) or <`td`> (<(dfn> table data)>).
+
+    Like list items, rows and data cells can be inferred.
+    See <(a[href=#Table-Inference]> table inference)>.
+  }
+
+
+  > <`article`>
+
+  A complete work of written text. In some cases, there may be more than one article per document.
+
+  > <`section`>
+
+  {
+    A logical section of a page or document.
+    The first heading found in the section is that section's heading.
+    Some examples of uses for sections:
+
+    ul {
+      To denote chapters in a book.
+
+      To separate the introduction, body, and bibliography of a paper.
+
+      To mark categories of items in a menu.
+    }
+  }
+
+  > <`div`> (<(dfn> content division)>)
+
+  {
+    A container used to group other elements.
+    This element behaves the same as a section,
+    but doesn't imply any logical grouping of its contents.
+    It is often used to style or visually group one or more elements.
+
+    A block declared in a section context that contains section content automatically creates
+    a <`div`> if no tag name is given:
+
+    ```
+    section {
+      {
+        This is the content of a div.
+      }
+
+      .foo {
+        This is the content of a div with the class 'foo'.
+      }
+    }
+    ```
+  }
+}
+
+> {
+  a[href=https://developer.mozilla.org/en-US/docs/Web/HTML/Element]> MDN
+
+  is an excellent resource for learning more about HTML elements.
+}
+
+h4> Line Element
+
+A <(i> line element)> consists of an optional selector followed by <`>`> and optionally another node
+(for example a paragraph or element).
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    >```
+    footer> This text is the content of the footer.
+    Here's another sentence in the footer.
+
+    This sentence is not part of the footer.
+    ```
+
+    {
+      footer> This text is the content of the footer.
+      Here's another sentence in the footer.
+    }
+  }
+  caption> A line element containing text can span multiple lines
+}
+
+Line elements are generally used for nodes that contain no children,
+or that are meant to wrap around a single child or line of text.
+
+Line elements contain the node following <`>`> if one is present.
+
+.scroll-x.box>table {
+  caption>
+
+  thead>* {
+    th> Source
+    th> Rendered
+  }
+  {
+    >```
+    p> Explicit <`p`> tag.
+    ```
+    {
+      p> Explicit <`p`> tag.
+    }
+  }
+  {
+    >```
+    > Implicit <`p`> tag when placed in a
+    section context.
+    ```
+    {
+      > Implicit <`p`> tag when placed in a
+      section context.
+    }
+  }
+  {
+    >```
+    hr>
+    ```
+    > {
+      hr>
+    }
+  }
+  {
+    >```
+    div> A div containing plain text
+    (not wrapped in <`p`> elements).
+    ```
+    {
+      div> A div containing plain text
+      (not wrapped in <`p`> elements).
+    }
+  }
+}
+
+h5> Inference
+
+When no element selector is provided, a line element will become a
+<`p`> when used in a section context, or a <`span`> in a paragraph context.
+For other contexts, see <(a[href=#Element-Inference]> element inference)>.
+
+h4> Block Element
+
+A <(i> block element)> consists of an optional selector
+followed by a pair of curly braces (<`{ }`>) containing zero or more nodes.
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    >```
+    article {
+      Article
+      section { Section 1 }
+      section { Section 2 }
+    }
+    ```
+    {
+      .box {
+        Article
+        .box { Section 1 }
+        .box { Section 2 }
+      }
+    }
+  }
+  caption> Block elements can be nested to form
+  the structure of the document.
+  Borders have been added for visualization purposes.
+}
+
+Blocks are generally used to define <(i> containers)>,
+or nodes that are meant to contain other nodes.
+For example, the <`article`>, <`section`>, <`table`>, <`details`>, <`ul`>, and <`ol`> elements
+will usually be declared with braces.
+
+h5> Inference
+
+When no element type is specified, a block element is inferred to be a <`div`>
+in a section context, or <`span`> in a paragraph context.
+For other contexts, see <(a[href=#Element-Inference]> element inference)>.
+
+h4> Line-Block Element
+
+A <(i> line-block element)> consists of an optional selector followed by <`> { ... }`>,
+where the curly braces contain zero or more nodes.
+A line-block behaves like a multi-node line element.
+
+aside>figure {
+  table {
+    thead>> <(th> MinTyML)> <(th> HTML)> <(th> Rendered)>
+    {
+      >```
+      div {
+        Line 1
+
+        Line 2
+      }
+      ```
+
+      >```
+      <div>
+        <p>A</p>
+        <p>B</p>
+      </div>
+      ```
+
+      { .result { div.box {
+        A
+
+        B
+      }}}
+    }
+    {
+      >```
+      div> {
+        A
+
+        B
+      }
+      ```
+
+      >```
+      <div>
+        A B
+      </div>
+      ```
+      { div.box> {
+          A
+
+          B
+        }
+      }
+    }
+  }
+
+  figcaption> A block <`div`> and a line-block <`div`>.
+  The block separates its text contents into paragraphs
+  while the line-block lumps all the text together.
+}
+
+The crucial difference between block and line-block elements is that a line-block
+doesn't wrap bare text up in paragraphs or any other element.
+
+h5> Inference
+
+Line-block elements that don't specify a type will be inferred exactly the same as a line element:
+
+
+scroll-x>table {
+  caption> Block vs. line-block inference comparison
+  thead>> <(th> Example)> <(th> MinTyML)> <(th> HTML)>
+
+  {
+    th> Block
+    >```
+    div {
+      { ... }
+    }
+    ```
+    > ```
+    <div>
+      <div>
+        ...
+      </div>
+    </div>
+    ```
+  }
+  {
+    th> Line-Block
+    >```
+    div {
+      > { ... }
+    }
+    ```
+    > ```
+    <div>
+      <p> ... </p>
+    </div>
+    ```
+  }
+}
+
+h4> Inline Element
+
+An <(i> inline element)> is an element placed inside a paragraph node.
+It consists of an optional node wrapped in angle brackets and parentheses: <`<( ... )>`>.
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    >```
+    Click <(a[href=http://example.com/]> here)>.
+    ```
+
+    {
+      Click <(a[href=http://example.com]> here)>.
+    }
+  }
+  caption> A link defined with an inline element.
+}
+
+An inline element can contain any kind of node, including
+elements and paragraphs.
+
+.scroll-x.box>table {
+  thead {
+    <(th[rowspan=2]> Inner Node)> <(th[colspan=2]>Example)>
+
+    <(th> MinTyML)> <(th> Rendered)>
+  }
+
+  {
+    th> Paragraph
+
+    >```
+    <( Hello, <_world_>! )>
+    ```
+
+    { .result {
+      <( Hello, <_world_>! )>
+    }}
+  }
+
+  {
+    th> Line
+
+    >```
+    <(button[type=button]> OK)>
+    ```
+
+    { .result {
+    <(button[type=button]> OK)>
+    }}
+  }
+
+  {
+    th> Block
+
+    >```
+    ol {
+      > item 1 <(ol {
+        > item 2
+        > item 3
+      })>
+      > item 4 <(ol {
+        > item 5
+        > item 6 <(ol {
+          > item 7
+        })>
+      })>
+    }
+    ```
+
+    { .result {
+      ol {
+        > item 1 <(ol {
+          > item 2
+          > item 3
+        })>
+        > item 4 <(ol {
+          > item 5
+          > item 6 <(ol {
+            > item 7
+          })>
+        })>
+      }
+    }}
+  }
+
+  {
+    th> Line-block
+
+    >```
+    ul> <(eggs)> <(milk)> <(> {
+      del> red
+      ins> green
+
+      chilis
+    })>
+    ```
+
+    { .result {
+        ul> <(eggs)> <(milk)> <(> {
+      del> red
+      ins> green
+
+      chilis
+      })>
+    }}
+  }
+}
+
+h3#Inline-Formatting> Inline Formatting
+
+<(i> Inline formatting)> nodes are a set of shorthands for certain inline elements.
+These should cover the most common scenarios for applying formatting to a slice of a paragraph.
+
+.scroll-x.box>table {
+  caption> Inline formatting nodes and equivalents
+  thead>* {
+    th> Formatting
+    th> Element
+    th> Appearance
+  }
+  {
+    > <`<#strong#>`>
+    > <`<(strong> strong)>`>
+    > <#strong#>
+  }
+  {
+    > <`</emphasis/>`>
+    > <`<(em> emphasis)>`>
+    > </emphasis/>
+  }
+  {
+    > <`<_underline_>`>
+    > <`<(u> underline)>`>
+    > <_underline_>
+  }
+  {
+    > <`<~strikethrough~>`>
+    > <`<(s> strikethrough)>`>
+    > <~strikethrough~>
+  }
+  {
+    > <`<"quote">`>
+    > <`<(q> quote)>`>
+    > <"quote">
+  }
+  {
+    >code> \<`code`\>
+    > <`<(code> <[[code]]>)>`>
+    > <`code`>
+  }
+}
+
+Note that <(code> \<'code'\>)> is different from the others;
+instead of parsing its contents as MinTyML, it reads the string as-is.
+This does mean inline code can't contain the terminator <(code>`\>)> as it would
+be ambiguous.
+To work around this, you need to use an equivalent like
+<(code><[[<(code> \<`code`\>)>]]>)>
+or <(code> <[#[<(code> <[[<`code`>]]>)>]#]>)>
+(
+  see <(a[href=#Escape-Sequence]> escape sequence)>
+  and <(a[href=#Verbatim-Segment]> verbatim segment)>
+).
+
+h3> Raw Text
+
+Sometimes you want to include text without it being interpreted in the form of MinTyML nodes.
+For example, if your text includes characters that normally need to be escaped.
+
+aside>figure>table {
+  thead>> <(th> Escaped)> <(th> Plaintext Block)> <(th> Verbatim Text)>
+
+  {
+    >```
+    3 \< x \< 8
+    ```
+
+    >```
+    """
+    3 < x < 8
+    """
+    ```
+
+    >```
+    <[[3 < x < 8]]>
+    ```
+  }
+
+  caption> Text containing <`<`>, <`>`>, <`{`>, or <`}`>
+  may be easier to read in raw text form than with escape sequences.
+}
+
+It's recommended that <`script`> and <`style`> elements contain raw text
+to avoid conflict between MinTyML syntax and JavaScript or CSS syntax.
+
+h4#Plaintext-Block> Plaintext Block
+
+A <(i> plaintext block)> is consists or zero or more lines of text surrounded by
+either <`'''`> or <`"""`>, where the opening and closing quotes are on their own lines.
+Any text on the lines between the opening and closing quotes will be
+interpreted as plain text and will not create any nodes.
+Plaintext blocks delimited by double quotes (<`"""`>)
+will have escape sequences subsituted,
+but those delimited by single quotes (<`'''`>) will not.
+
+.scroll-x.box>table {
+  caption> Comparison of single-quoted and double-quoted plaintext blocks
+  thead>> <(th> Delimiter)> <(th>MinTyML)> <(th>Rendered)>
+
+  {
+    th> Single quotes
+    >```
+    '''
+    Hello, \u{1F30E} </world/>!
+    '''
+    ```
+
+    { .result {
+      '''
+      Hello, \u{1F30E} </world/>!
+      '''
+    }}
+  }
+  {
+    th> Double quotes
+    >```
+    """
+    Hello, \u{1F30E} </world/>!
+    """
+    ```
+
+    { .result {
+      """
+      Hello, \u{1F30E} </world/>!
+      """
+    }}
+  }
+}
+
+Any indentation prior to the closing quotes' indentation level will be discarded.
+
+h4#Verbatim-Segment> Verbatim Segment
+
+Inspired by XML's <`CDATA`> syntax, a <(i> verbatim segment)>
+is a string of text surrounded by <`<[[`> and <`]]>`>.
+The contents of a verbatim segment are interpreted as text
+and included in the document as-is.
+This means no nodes can be nested inside the segment
+and escape sequences will not be substitued.
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    > ```
+    <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
+    <[##[or like this: <[#[ ... ]#]>]##]>
+    or even like this: ]##]\>
+    ```
+
+    {
+      <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
+      <[##[or like this: <[#[ ... ]#]>]##]>
+      or even like this: \<[##[ ... ]##]\>
+    }
+  }
+  caption> Verbatim segments using the alternate delimiters.
+}
+
+The alternate delimiters <`<[#[`> and <`]#]>`> or <`<[##[`> and <`]##]>`>
+may also be used when case the text may contain <`]]>`> or <`]#]>`>.
+
+.scroll-x.box>table {
+  thead>> <(th> MinTyML)> <(th>HTML)> <(th> Rendered)>
+
+  {
+    >```
+    <[[Hello, world!]]>
+    ```
+
+    >```
+    Hello, world!
+    ```
+
+    {.result {
+      <[[Hello, world!]]>
+    }}
+  }
+  {
+    >```
+    pre {
+      <[[Hello,
+      world!]]>
+    }
+    ```
+
+    >```
+    <pre>
+      Hello,&Newline;world!
+    </pre>
+    ```
+
+    {.result {
+      pre {
+        <[[Hello,
+world!]]>
+      }
+    }}
+  }
+
+  {
+    >```
+    <[[Hello,\nworld!]]>
+    ```
+
+    >```
+    Hello,\nworld!
+    ```
+
+    {.result {
+    <[[Hello,\nworld!]]>
+    }}
+  }
+  {
+    >```
+    <[[Hello, </world/>!]]>
+    ```
+
+    >```
+    Hello, &lt;/world/&gt;!
+    ```
+
+    {.result {
+    <[[Hello, </world/>!]]>
+    }}
+  }
+}
+
+h3> Code Block
+
+A <(i> code block)> closely resembles a <(a[href=#Plaintext-Block]> plaintext block)>,
+but it begins and ends with backticks (<`````>) rather than quotation marks.
+It differs from the single-quoted plaintext block in that the contents are wrapped
+in a <`code`> element within a <`pre`> element.
+This means it will usually be rendered in a monospace font, and whitespace will not be
+ignored.
+A code block is equivalent to a single-quoted plaintext block following <`pre>code>`>
+
+.scroll-x.box>table {
+  caption> Code block defined with code block syntax vs. a plaintext block
+  thead>> <(th> Code Block Source)> <(th> Plaintext Block Source)> <(th> Rendered)>
+  {
+    >pre>code>'''
+    ```
+    function add(a, b) {
+      return a + b;
+    }
+    ```
+    '''
+    >```
+    pre>code>'''
+    function add(a, b) {
+      return a + b;
+    }
+    '''
+    ```
+
+    { .result {
+      pre>code>'''
+      function add(a, b) {
+        return a + b;
+      }
+      '''
+    }}
+  }
+}
+
+h3> Comment
+
+A <(i> comment)> contains text that is visible in the source of the document.
+but excluded from the presentation.
+Comments are enclosed with <`<!`> and <`!>`> like so:
+
+```
+<! This is a comment !>
+```
+
+The above example would be represented in HTML with:
+
+```
+<!-- This is a comment -->
+```
+
+aside>figure {
+
+  ```
+  <!
+    div {
+      foo
+      <! TODO: complete this div !>
+    }
+  !>
+  ```
+
+  figcaption> Comments can be nested so nodes that already contain
+  comments can be commented out.
+}
+
+Comments can be used anywhere a node is valid, including within a paragraph:
+
+.scroll-x.box>table {
+  caption> Comments within a paragraph
+
+  thead>> <(th> Source)> <(th> Rendered)>
+
+  {
+    >```
+    Hello, <! this is a comment !> world!
+    ```
+
+    { .result {
+    Hello, <! this is a comment !> world!
+    } }
+  }
+
+  {
+    >```
+    Hello,<! this is a comment !>world!
+    ```
+
+    { .result {
+    Hello,<! this is a comment !>world!
+    } }
+  }
+}
+
+h3#Escape-Sequence> Escape Sequence
+
+An <(i> Escape sequence)> begins with a backslash (<`\`>)
+and provides an alternate representation of a character.
+
+.scroll-x.box>table {
+  caption> All valid escapes
+  thead>> <(th> Escape)> <(th> Output)>
+
+  <(<`\n`>)> <(Line feed (new line))>
+
+  <(<`\r`>)> <(Carriage return)>
+
+  <(<`\t`>)> <(Tab)>
+
+  <(<`\\`>)> <(Backslash (<`\`>))>
+
+  <(<`\ `> (a space following <`\`>))> <(Space)>
+
+  {
+    {
+      <`\x`><(var> hh)>
+
+      Where <(var> hh)> is a 2-digit hexadecimal number
+      no greater than <(.num> 7F)>
+    }
+    {
+      The character with ASCII number <(var> hh)>.
+
+      e.g. <`\x7B`> becomes <"\x7B">.
+    }
+  }
+
+  {
+    {
+      <`\u{`><(var> hex)><`}`>
+
+      Where <(var> hex)> is a hexadecimal number between 1 and 6 digits.
+    }
+
+    {
+      The character with unicode number <(var> hex)>.
+
+      e.g. <`\u{20AC}`> becomes <"\u{20AC}">
+    }
+  }
+
+  {
+      {
+        <`\`><(var>sym)>
+
+        Where <(var> sym)> is any of:
+
+        ul.row-list {
+          ><`<`>
+          ><`>`>
+          ><`{`>
+          ><`}`>
+          ><`'`>
+          ><`"`>
+        }
+      }
+
+      {
+        <(var> sym)>
+
+        e.g. <`\>`> becomes <"\>">
+      }
+  }
+}
+h2#Element-Inference> Element Inference
+
+h3> Context
+
+The type of an unspecified element is inferred based on <(i> context)>,
+which is determined by the type of the containing element.
+
+h4> Standard Contexts
+
+aside>figure>table {
+  thead>> <(th> Implicit)> <(th> Explicit)>
+  {
+    > ```
+    section {
+      {
+        > {
+          > Hello, world!
+        }
+      }
+
+      Goodbye, world!
+    }
+    ```
+
+    > ```
+    section {
+      div {
+        p> {
+          span> Hello, world!
+        }
+    }
+
+      p> Goodbye, world!
+    }
+    ```
+  }
+  caption> Implicit vs equivalent explicit types
+}
+
+dl {
+  > section
+
+  {
+    The inside of an element that may contain paragraphs, headings, lists, tables,
+    and structural elements like <`header`>, <`footer`>, <`section`>, or <`article`>.
+
+    Elements that contain a section context include:
+
+    ul.row-list {
+      > <`body`>
+      > <`main`>
+      > <`article`>
+      > <`header`>
+      > <`footer`>
+      > <`section`>
+      > <`nav`>
+      > <`aside`>
+      > <`figure`>
+      > <`dialog`>
+      > <`blockquote`>
+      > <`div`>
+      > <`template`>
+      > <`hgroup`>
+    }
+  }
+
+  > paragraph
+
+  {
+    The inside of an element that should only contain
+    text or items that can flow with text (like buttons or images).
+
+    Elements that contain a paragraph context include but are not limited to:
+
+    ul.row-list {
+      > <`p`>
+      > <`h1`>...<`h6`>
+      > <`span`>
+      > <(a[href=#Inline-Formatting]>inline formatting)>
+    }
+  }
+}
+
+Some elements contain section context if declared as a block element
+and paragraph context if declared as a line, line-block, or inline element.
+This includes the following:
+
+ul.row-list {
+  > <`td`> (including when inferred as a child of <`tr`>)
+  > <`th`>
+  > <`li`> (including when inferred as a child of <`ul`> or <`ol`>)
+  > <`dd`>
+  > <`figcaption`>
+}
+
+.scroll-x.box>table {
+  caption> Inference by context and node type
+  thead {
+    {
+      th[rowspan=3]> Context
+      th[colspan=3]> Node Type
+    }
+    {
+      th[colspan=2]> Element
+      th[rowspan=2]> Paragraph
+    }
+    {
+      th> Line
+      th> Block
+    }
+  }
+
+  {
+    th>Section
+    > <`p`>
+    > <`div`>
+    > <`p`>
+  }
+
+  {
+    th>Paragraph
+    > <`span`>
+    > <`span`>
+    > plain text
+  }
+}
+
+h4> Specialized Contexts
+
+Some contexts are specific to a single element type
+or small group of element types.
+
+aside>figure>table {
+  thead>> <(th> Source)> <(th> Rendered)>
+  {
+    > ```
+    details[open] {
+      More info
+
+      This is the more detailed
+      information.
+    }
+    ```
+
+    {
+      details[open].box {
+      More info
+
+      This is the more detailed
+      information.
+      }
+    }
+  }
+
+  caption> <`detail`>'s specialized context
+  infers the first paragraph as the summary.
+}
+
+dl {
+  #List-Inference> list
+
+  The inside of a <`ul`>, <`ol`>, or <`menu`> element.
+  Infers contents to be list items (<`li`>).
+
+  #Table-Inference> table
+
+  The inside of a <`table`>, <`thead`>, <`tbody`>, or <`tfoot`> element.
+  Infers contents to be rows (<`tr`>).
+
+  > table row
+
+  The inside of a <`tr`> element.
+  Infers contents to be data cells (<`td`>).
+  <#Note#>: header cells (<`th`>) will need their element type explicitly stated.
+
+  > details
+
+  The inside of a <`details`> element.
+  The first line, block, or paragraph is inferred to be a <`summary`> element.
+  The remainder of the contents are in section context.
+
+  > fieldset
+
+  If the <`fieldset`> element's first node is a paragraph,
+  that paragraph will be inferred as a <`legend`>.
+  All other nodes are in section context.
+
+  > description list
+
+  The inside of a <`dl`> element.
+  Infers line elements to be description terms (<`dt`>)
+  and all other nodes to be description details (<`dd`>).
+
+  > links and custom elements
+
+  If used inside a paragraph context,
+  <`a`> as well as any custom element contain a paragraph context
+  if used in a paragraph context.
+  Otherwise contains a section context.
+
+
+  > others
+
+  The following special contexts can also be found on the table below:
+
+  ul.row-list {
+    label (<`label`>)
+    <(ul { Line elements inferred as <`input`> })>
+
+    data list (<`datalist`>, <`optgroup`>)
+    <(ul { All children inferred as <`option`> })>
+
+    select (<`select`>)
+    <(ul {
+      Like data list, but blocks inferred as <`optgroup`>
+    })>
+
+    column group (<`colgroup`>)
+    <(ul{ Infers elements as <`col`> } )>
+
+    image map (<`imagemap`>)
+    <(ul{ Infers elements as <`area`> } )>
+  }
+}
+
+
+.scroll-x.box>table {
+  caption> Inference by context and node type
+  thead {
+    {
+      th[rowspan=3]> Context
+      th[colspan=3]> Node Type
+    }
+    {
+      th[colspan=2]> Element
+      th[rowspan=2]> Paragraph
+    }
+    {
+      th> Line
+      th> Block
+    }
+  }
+
+  {
+    th> List
+    > <`li`>
+    > <`li`>
+    > <`li`>
+  }
+  {
+    th> Table
+    > <`tr`>
+    > <`tr`>
+    > <`tr`>
+  }
+  {
+    th> Table Row
+    > <`td`>
+    > <`td`>
+    > <`td`>
+  }
+  {
+    th> Description List
+    > <`dt`>
+    > <`dd`>
+    > <`dd`>
+  }
+  {
+    th> Label
+    td> <`input`>
+    td> <`div`>
+    td> <`p`>
+  }
+  {
+    th> Select
+    > <`option`>
+    > <`optgroup`>
+    > <`option`>
+  }
+  {
+    th> Data List
+    > <`option`>
+    > <`option`>
+    > <`option`>
+  }
+  {
+    th> Column Group
+    > <`col`>
+    > <`col`>
+    >
+  }
+  {
+    th> Image Map
+    > <`area`>
+    > <`area`>
+    >
+  }
+}

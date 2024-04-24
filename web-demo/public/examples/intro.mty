@@ -394,7 +394,7 @@ article[lang=en-US] {
       div> A div containing plain text
       (not wrapped in <`p`> elements).
       ```
-       {
+        {
         div> A div containing plain text
         (not wrapped in <`p`> elements).
       }
@@ -486,7 +486,7 @@ article[lang=en-US] {
         }
         ```
 
-       >```
+        >```
         <div>
           A B
         </div>
@@ -846,7 +846,7 @@ article[lang=en-US] {
 
       >```
       <pre>
-        Hello,&Newline;  world!
+        Hello,&Newline;world!
       </pre>
       ```
 
@@ -1186,26 +1186,29 @@ article[lang=en-US] {
   Some contexts are specific to a single element type
   or small group of element types.
 
-  aside>figure {
-    ```
-    details[open] {
-      More info
-
-      This is the more detailed
-      information.
-    }
-    ```
-    hr>
-    section.box>.result {
-      details[open].box {
+  aside>figure>table {
+    thead>> <(th> Source)> <(th> Rendered)>
+    {
+      > ```
+      details[open] {
         More info
 
         This is the more detailed
         information.
       }
+      ```
+
+      {
+        details[open].box {
+        More info
+
+        This is the more detailed
+        information.
+        }
+      }
     }
 
-    figcaption> <`detail`>'s specialized context
+    caption> <`detail`>'s specialized context
     infers the first paragraph as the summary.
   }
 

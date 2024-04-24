@@ -1,5 +1,5 @@
 <h2>What is MinTyML?</h2>
-<p>MinTyML (from <dfn><u>Min</u>imalist H<u>TML</u></dfn>) is an alternative HTML syntax intended for writing documents.</p>
+<p>MinTyML (from <dfn><ins>Min</ins>imalist H<ins>TML</ins></dfn>) is an alternative HTML syntax intended for writing documents.</p>
 <h3>Principles</h3>
 <p>This markup language is designed with the following principles in mind:</p>
 <ol>
@@ -45,7 +45,7 @@
         </tr>
       </thead>
       <tr>
-        <td><pre><code>Lorem ipsum dolor sit amet,&NewLine;consectetur adipiscing elit.&NewLine;  &NewLine;Sed do eiusmod tempor incididunt&NewLine;ut labore et dolore magna aliqua.</code></pre></td>
+        <td><pre><code>Lorem ipsum dolor sit amet,&NewLine;consectetur adipiscing elit.&NewLine;&NewLine;Sed do eiusmod tempor incididunt&NewLine;ut labore et dolore magna aliqua.</code></pre></td>
         <td>
           <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
           <p>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
@@ -329,7 +329,7 @@
       <td><pre><code>&lt;( Hello, &lt;_world_&gt;! )&gt;</code></pre></td>
       <td>
         <div class="result">
-          <p><span>Hello, <u>world</u>!</span></p>
+          <p><span>Hello, <ins>world</ins>!</span></p>
         </div>
       </td>
     </tr>
@@ -392,7 +392,7 @@
     <tr>
       <td><code>&lt;_underline_&gt;</code></td>
       <td><code>&lt;(u&gt; underline)&gt;</code></td>
-      <td><u>underline</u></td>
+      <td><ins>underline</ins></td>
     </tr>
     <tr>
       <td><code>&lt;~strikethrough~&gt;</code></td>
@@ -504,10 +504,10 @@
     </tr>
     <tr>
       <td><pre><code>pre {&NewLine;  &lt;[[Hello,&NewLine;  world!]]&gt;&NewLine;}</code></pre></td>
-      <td><pre><code>&lt;pre&gt;&NewLine;  Hello,&amp;Newline;  world!&NewLine;&lt;/pre&gt;</code></pre></td>
+      <td><pre><code>&lt;pre&gt;&NewLine;  Hello,&amp;Newline;world!&NewLine;&lt;/pre&gt;</code></pre></td>
       <td>
         <div class="result">
-          <pre>Hello,&NewLine;  world!</pre>
+          <pre>Hello,&NewLine;world!</pre>
         </div>
       </td>
     </tr>
@@ -661,12 +661,18 @@
 <h4>Standard Contexts</h4>
 <aside>
   <figure>
-    <pre><code>section {&NewLine;  {&NewLine;    &gt; {&NewLine;      &gt; Hello, world!&NewLine;    }&NewLine;  }&NewLine;  &NewLine;  Goodbye, world!&NewLine;}</code></pre>
-    <figcaption>A sample with unspecified element types.</figcaption>
-  </figure>
-  <figure>
-    <pre><code>section {&NewLine;  div {&NewLine;    p&gt; {&NewLine;      span&gt; Hello, world!&NewLine;    }&NewLine;  }&NewLine;  &NewLine;  p&gt; Goodbye, world!&NewLine;}</code></pre>
-    <figcaption>An equivalent simple with the inferred types.</figcaption>
+    <table>
+      <thead>
+        <tr>
+          <th>Implicit</th> <th>Explicit</th>
+        </tr>
+      </thead>
+      <tr>
+        <td><pre><code>section {&NewLine;  {&NewLine;    &gt; {&NewLine;      &gt; Hello, world!&NewLine;    }&NewLine;  }&NewLine;&NewLine;  Goodbye, world!&NewLine;}</code></pre></td>
+        <td><pre><code>section {&NewLine;  div {&NewLine;    p&gt; {&NewLine;      span&gt; Hello, world!&NewLine;    }&NewLine;}&NewLine;&NewLine;  p&gt; Goodbye, world!&NewLine;}</code></pre></td>
+      </tr>
+      <caption>Implicit vs equivalent explicit types</caption>
+    </table>
   </figure>
 </aside>
 <dl>
@@ -753,7 +759,7 @@
         </tr>
       </thead>
       <tr>
-        <td><pre><code>details[open] {&NewLine;  More info&NewLine;  &NewLine;  This is the more detailed&NewLine;  information.&NewLine;}</code></pre></td>
+        <td><pre><code>details[open] {&NewLine;  More info&NewLine;&NewLine;  This is the more detailed&NewLine;  information.&NewLine;}</code></pre></td>
         <td>
           <details class="box" open>
             <summary>More info</summary>

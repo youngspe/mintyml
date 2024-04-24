@@ -1,0 +1,59 @@
+style> '''
+.figures {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: space-around;
+  align-items: center;
+}
+.figures>* {
+  margin-inline: 0.5rem;
+  max-width: fit-content;
+  flex: 1 1 min-content;
+}
+pre>code {
+  text-wrap: nowrap;
+}
+.result {
+  width: fit-content;
+  margin: auto;
+}
+.box:has(>.result) {
+  width: auto;
+}
+.scroll-x {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: max-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+.num {
+  font-family: math;
+}
+
+.row-list {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: flex-start;
+  justify-items: start;
+  align-items: center;
+  max-width: fit-content;
+}
+.row-list:has(>li li,>li p+*,>li *+p)>li {
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 0.625rem #00000040;
+  padding: 0.25rem;
+  margin: 0.25rem;
+  width: fit-content;
+}
+'''
+
+article[lang=en-US] {
+  h1> MinTyML Introduction
+
+  Expand the <"MinTyML Input"> box to see and edit the source of this document, or use the <"Example"> dropdown in the above banner to see and edit a different example.
+
+<! content here !>
+}
