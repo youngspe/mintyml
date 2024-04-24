@@ -285,7 +285,7 @@ function Publish-Release {
     if ($Publish) {
         $assets = Get-ChildItem "$WSRoot/target-release/*.tgz" | ForEach-Object FullName
         Write-Host "Creating release..."
-        Test-ExitCode gh release create --latest $tagName @assets
+        Test-ExitCode gh release create --latest --verify-tag=false $tagName @assets
     }
 }
 
