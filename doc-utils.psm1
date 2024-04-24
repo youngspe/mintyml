@@ -15,6 +15,24 @@ function Build-ExampleIntro {
 
     $template = Get-Content -Raw "$WSRoot/example-doc/template.mty"
 
-    $template -replace '<! content here !>',$content `
+    $template -replace '<! content here !>', $content `
     | Out-File -NoNewline "$WSRoot/web-demo/public/examples/intro.mty"
+}
+
+function Build-CliReadme {
+    function getHelp {
+        cargo run -qp mintyml-cli -- help @args
+        | ForEach-Object { $_ ? "    " + $_ : "" }
+    }
+
+    $out = & {
+        "## Help Text"
+        ""
+        getHelp
+        '### `convert` Command'
+        ""
+        getHelp convert
+    }
+    $out -join "`n"
+    | Out-File -NoNewline "$WSRoot/minty-cli/README.md"
 }

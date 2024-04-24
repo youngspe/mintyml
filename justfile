@@ -70,6 +70,7 @@ update-readme:
     Import-Module ./doc-utils.psm1; \
     Build-ReadmeDotMd; \
     Build-ExampleIntro; \
+    Build-CliReadme; \
     '
 
 act *ARGS:

@@ -394,7 +394,7 @@ article[lang=en-US] {
       div> A div containing plain text
       (not wrapped in <`p`> elements).
       ```
-        {
+      {
         div> A div containing plain text
         (not wrapped in <`p`> elements).
       }

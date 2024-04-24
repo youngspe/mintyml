@@ -28,6 +28,7 @@ use crate::utils::default;
 /// For more information, see https://youngspe.github.io/mintyml
 /// and https://github.com/youngspe/mintyml
 #[derive(Debug, Parser)]
+#[command(bin_name = "mintyml-cli")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -41,6 +42,8 @@ enum Command {
 /// Convert MinTyML to HTML.
 #[derive(Debug, Args)]
 struct Convert {
+    #[command(flatten)]
+    src: ConvertSource,
     /// Whether to recursively search subdirectories when searching a directory for source files.
     /// If specified, the search will be limited to `DEPTH` levels of nested subdirectories.
     #[arg(
@@ -52,15 +55,14 @@ struct Convert {
     )]
     recurse: Option<Option<u32>>,
     #[command(flatten)]
-    options: ConvertOptions,
-    #[command(flatten)]
     dest: ConvertDest,
     #[command(flatten)]
-    src: ConvertSource,
+    options: ConvertOptions,
 }
 
 #[derive(Debug, Args)]
 #[group(multiple = false)]
+#[command(next_help_heading = "Output Destination")]
 struct ConvertDest {
     /// Write the converted HTML to the given filename or directory
     #[arg(short = 'o', long)]
@@ -72,6 +74,7 @@ struct ConvertDest {
 
 #[derive(Debug, Args)]
 #[group(required = true)]
+#[command(next_help_heading = "Input Source")]
 struct ConvertSource {
     /// Read MinTyML source from stdin.
     #[arg(long, conflicts_with_all = ["src_dir", "src_files"], requires = "ConvertDest")]
@@ -85,6 +88,7 @@ struct ConvertSource {
 }
 
 #[derive(Debug, Args)]
+#[command(next_help_heading = "Output Options")]
 struct ConvertOptions {
     /// Produce XHTML5 instead of HTML
     #[arg(short, long)]
