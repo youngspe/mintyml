@@ -3,16 +3,21 @@ extern crate clap;
 extern crate mintyml;
 extern crate rayon;
 
+mod key_value;
+
 use std::{
-    ffi::OsStr,
     fs::{self, read_dir, OpenOptions},
     io::{self, Read, Seek, Write},
     iter,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, bail, Result as AnyResult};
-use clap::{value_parser, Args, Parser, Subcommand};
+use clap::{
+    builder::{EnumValueParser, StringValueParser},
+    value_parser, ArgAction, Args, Parser, Subcommand, ValueEnum,
+};
+use key_value::KeyValueParser;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use utils::UtilExt as _;
 
@@ -38,7 +43,13 @@ enum Command {
 struct Convert {
     /// Whether to recursively search subdirectories when searching a directory for source files.
     /// If specified, the search will be limited to `DEPTH` levels of nested subdirectories.
-    #[arg(short = 'r', long, name="DEPTH", conflicts_with = "src_files", requires = "src_dir")]
+    #[arg(
+        short = 'r',
+        long,
+        name = "DEPTH",
+        conflicts_with = "src_files",
+        requires = "src_dir"
+    )]
     recurse: Option<Option<u32>>,
     #[command(flatten)]
     options: ConvertOptions,
@@ -87,6 +98,37 @@ struct ConvertOptions {
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.
     #[arg(long)]
     fragment: bool,
+    /// Override the element types used when converting special tags.
+    ///
+    /// This argument may be used multiple times to allow multiple overrides.
+    /// Additionally, multiple overrides can be specified per argument, separated by commas.
+    ///
+    /// Example:
+    ///     --special_tag underline=ins,strike=del
+    #[arg(long,
+        value_parser = KeyValueParser::<EnumValueParser<SpecialTag>, StringValueParser>::default(),
+        action = ArgAction::Append,
+        value_delimiter = ','
+    )]
+    special_tag: Vec<(SpecialTag, String)>,
+}
+
+#[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq)]
+enum SpecialTag {
+    #[value(help = "<# strong #> (default: 'strong')")]
+    Strong,
+    #[value(help = "</ emphasis /> (default: 'em')")]
+    Emphasis,
+    #[value(help = "<_ underline _> (default: 'u')")]
+    Underline,
+    #[value(help = "<~ strike ~> (default: 's')")]
+    Strike,
+    #[value(help = "<\" quote \"> (default: 'q')")]
+    Quote,
+    #[value(help = "<` code `> (default: 'code')")]
+    Code,
+    #[value(help = "``` code block ``` (default: 'pre')")]
+    CodeBlockContainer,
 }
 
 impl Cli {
@@ -228,6 +270,22 @@ impl Convert {
                     cfg.indent = Some(iter::repeat(' ').take(options.indent as usize).collect());
                 }
             })
+            .update(|config| {
+                for (key, value) in &options.special_tag {
+                    let target = match key {
+                        SpecialTag::Strong => &mut config.special_tags.strong,
+                        SpecialTag::Emphasis => &mut config.special_tags.emphasis,
+                        SpecialTag::Underline => &mut config.special_tags.underline,
+                        SpecialTag::Strike => &mut config.special_tags.strike,
+                        SpecialTag::Quote => &mut config.special_tags.quote,
+                        SpecialTag::Code => &mut config.special_tags.code,
+                        SpecialTag::CodeBlockContainer => {
+                            &mut config.special_tags.code_block_container
+                        }
+                    };
+                    *target = Some(value.into())
+                }
+            })
     }
 
     fn convert(src: impl Read, mut dest: impl Write, options: &ConvertOptions) -> AnyResult<()> {
@@ -289,56 +347,12 @@ fn change_extension(path: &mut PathBuf, options: &ConvertOptions) {
         .push(if options.xml { ".xhtml" } else { ".html" });
 }
 
-enum PathKind {
-    Directory,
-    File,
-}
-
-fn path_kind(path: &Path) -> AnyResult<Option<PathKind>> {
-    if path.file_name().is_none() {
-        return Some(PathKind::Directory).ok();
-    }
-
-    let Some(last) = path
-        .to_str()
-        .map(|s| s.chars().last())
-        .or_else(|| {
-            path.as_os_str()
-                .as_encoded_bytes()
-                .last()
-                .map(|&x| x.try_into_::<char>().ok())
-        })
-        .flatten()
-    else {
-        return None.ok();
-    };
-
-    if path::is_separator(last) {
-        return Some(PathKind::Directory).ok();
-    }
-
-    match path.metadata() {
-        Ok(m) if m.is_dir() => PathKind::Directory.some().ok(),
-        Ok(_) => PathKind::File.some().ok(),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => None.ok(),
-        Err(e) => Err(e.into()),
-    }
-}
-
 fn has_minty_extension<P: AsRef<Path>>(path: P) -> bool {
     const EXTENSIONS: [&'static str; 2] = ["mty", "minty"];
     let Some(ext) = path.as_ref().extension() else {
         return false;
     };
     EXTENSIONS.iter().any(|ext2| ext.eq_ignore_ascii_case(ext2))
-}
-
-fn src_base_name(src: &Path) -> Option<&OsStr> {
-    if has_minty_extension(src) {
-        src.file_stem().or(src.file_name())
-    } else {
-        src.file_name()
-    }
 }
 
 fn search_dir(dir: &Path, recurse: u32) -> AnyResult<Vec<PathBuf>> {
@@ -417,6 +431,7 @@ impl IoHelper for DefaultIoHelper {
 }
 
 struct AppCx<Cx: CxType> {
+    #[allow(unused)]
     pub cx_type: Cx,
     pub io: Cx::Io,
 }
