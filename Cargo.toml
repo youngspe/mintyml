@@ -6,7 +6,7 @@ resolver = "2"
 license = "MIT"
 repository = "https://github.com/youngspe/mintyml"
 authors = ["Spencer Young"]
-version = "0.1.7"
+version = "0.1.8"
 
 [profile.release]
 strip = true
