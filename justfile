@@ -62,7 +62,7 @@ publish-release:
 build-release:
     pwsh -c ' \
     Import-Module ./build-utils.psm1; \
-    Build-Release;
+    Build-Release; \
     '
 
 update-readme:

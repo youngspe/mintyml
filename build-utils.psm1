@@ -56,7 +56,7 @@ function Set-Version([string] $Version) {
     $src = (Get-Content "$WSRoot/Cargo.toml" -Raw)
     $out = $src -replace '(?m)(?<=^\s*version\s*=\s*").*?(?="\s*$)', $Version
 
-    $out > "$WSRoot/Cargo.toml"
+    $out | Out-File -NoNewline "$WSRoot/Cargo.toml"
 }
 
 $packageNames = 'mintyml', 'minty-cli', 'minty-wasm'
@@ -75,7 +75,7 @@ function Get-NewVersion([WSState] $State) {
         && git show-ref -s --tags "v$oldVersion"
 
     if ($State.OldTag) {
-        $State.NewVersion = Get-VersionIncrement
+        $State.NewVersion = Get-VersionIncrement $oldVersion
         Write-Host (
             "::notice title=Version::Tag 'v$oldVersion' already exists; " +
             "Incrementing to v$($State.NewVersion)"
@@ -109,7 +109,7 @@ function Get-OutOfDatePackages([WSState] $State) {
             'minty-wasm'
         }
 
-    } | ForEach-Object { $State.Packages.Add($_) }
+    } | ForEach-Object { $State.Packages.Add($_); $_ }
 }
 
 function Build-NodeManifest([WSState] $State = $null) {
@@ -128,7 +128,10 @@ function Update-Version([WSState] $State) {
     }
 
     if ($State.OldTag) {
+        Write-Host "Updating version in manifest..."
         Set-Version $version
+    } else {
+        Write-Host "Manifest remains unchanged"
     }
 
     cargo update --workspace --offline
