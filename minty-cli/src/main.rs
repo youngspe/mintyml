@@ -28,7 +28,7 @@ use crate::utils::default;
 /// For more information, see https://youngspe.github.io/mintyml
 /// and https://github.com/youngspe/mintyml
 #[derive(Debug, Parser)]
-#[command(bin_name = "mintyml-cli")]
+#[command(bin_name = "mintyml-cli", max_term_width = 100)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -99,8 +99,22 @@ struct ConvertOptions {
     /// Number of spaces for each indentation level when `--pretty` is enabled.
     #[arg(long, requires = "pretty", value_parser = value_parser!(u8).range(0..=16), default_value = "2")]
     indent: u8,
+    /// Make a complete HTML page by wrapping the contents in `<html>` tags.
+    ///
+    /// * If the source document already has an `html` element at the top level, no changes will be made.
+    ///
+    /// * If the source document has a `body` element at the top level, no changes will be made
+    /// beyond wrapping the document in `<html>` tags.
+    ///
+    /// * Otherwise, a `head` element will be created containing all top-level elements that belong in `head`
+    /// (e.g. `title`, `meta`, `style`), and a `body` element will be created containing all other top-level elements.
+    ///
+    /// [default: true]
+    #[arg(long, num_args = 0..=1, default_missing_value = "true", require_equals = true, action = ArgAction::Set, hide_default_value = false)]
+    complete_page: Option<bool>,
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.
-    #[arg(long)]
+    /// Equivalent to `--complete-page=false`
+    #[arg(long, conflicts_with = "complete_page")]
     fragment: bool,
     /// Override the element types used when converting special tags.
     ///
@@ -268,7 +282,7 @@ impl Convert {
     fn get_convert_config(options: &ConvertOptions) -> mintyml::OutputConfig {
         mintyml::OutputConfig::new()
             .xml(options.xml)
-            .complete_page(!options.fragment)
+            .complete_page(options.complete_page.unwrap_or(!options.fragment))
             .update(|cfg| {
                 if options.pretty {
                     cfg.indent = Some(iter::repeat(' ').take(options.indent as usize).collect());

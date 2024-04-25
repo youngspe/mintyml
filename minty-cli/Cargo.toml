@@ -11,7 +11,7 @@ authors.workspace = true
 
 [dependencies]
 anyhow = "1.0.79"
-clap = { version = "4.5.0", features = ["derive", "string"] }
+clap = { version = "4.5.0", features = ["derive", "string", "wrap_help"] }
 rayon = "1.8.1"
 
 [dependencies.mintyml]

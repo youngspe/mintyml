@@ -82,9 +82,12 @@ article[lang=en-US] {
 
   h3> Command-line interface
 
-  <(a[href=https://crates.io/crates/mintyml-cli]> mintyml-cli )>
+  <(a[href=https://github.com/youngspe/mintyml/tree/main/minty-cli]> mintyml-cli )>
 
-  The CLI is currently only available from Cargo: <`cargo install mintyml-cli`>
+  The command-line MinTyML converter can be downloaded from
+  <(a[href=https://github.com/youngspe/mintyml/releases/latest]> Github)>
+  or installed with
+  <(a[href=https://crates.io/crates/mintyml-cli]> <`cargo install mintyml-cli`>)>
 
   h3> Libraries
 

@@ -11,8 +11,8 @@
 <h3>Demo</h3>
 <p><a href="https://youngspe.github.io/mintyml">Web-based demo</a></p>
 <h3>Command-line interface</h3>
-<p><a href="https://crates.io/crates/mintyml-cli">mintyml-cli</a></p>
-<p>The CLI is currently only available from Cargo: <code>cargo install mintyml-cli</code></p>
+<p><a href="https://github.com/youngspe/mintyml/tree/main/minty-cli">mintyml-cli</a></p>
+<p>The command-line MinTyML converter can be downloaded from <a href="https://github.com/youngspe/mintyml/releases/latest">Github</a> or installed with <a href="https://crates.io/crates/mintyml-cli"><code>cargo install mintyml-cli</code></a></p>
 <h3>Libraries</h3>
 <table>
   <thead>

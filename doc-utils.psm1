@@ -13,7 +13,7 @@ function Build-ExampleIntro {
         | ForEach-Object { $_ ? "  " + $_ : "" }
     ) -join "`n"
 
-    $template = Get-Content -Raw "$WSRoot/example-doc/template.mty"
+    $template = Get-Content -Raw "$WSRoot/doc-templates/readme.mty"
 
     $template -replace '<! content here !>', $content `
     | Out-File -NoNewline "$WSRoot/web-demo/public/examples/intro.mty"
@@ -21,18 +21,12 @@ function Build-ExampleIntro {
 
 function Build-CliReadme {
     function getHelp {
-        cargo run -qp mintyml-cli -- help @args
-        | ForEach-Object { $_ ? "    " + $_ : "" }
+        (cargo run -qp mintyml-cli -- help @args
+        | ForEach-Object { $_ ? "    " + $_ : "" }) -join "`n"
     }
 
-    $out = & {
-        "## Help Text"
-        ""
-        getHelp
-        '### `convert` Command'
-        ""
-        getHelp convert
-    }
-    $out -join "`n"
+    $template = Get-Content -Raw "$WSRoot/doc-templates/cli-readme.md"
+
+    $template -replace '\{\{\s*help\s*(.*?)\s*}}', { Invoke-Expression "getHelp $($_.Groups[1])" } `
     | Out-File -NoNewline "$WSRoot/minty-cli/README.md"
 }
