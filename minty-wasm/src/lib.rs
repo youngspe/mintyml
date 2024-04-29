@@ -55,7 +55,7 @@ fn to_js_error(e: ConvertError) -> JsValue {
                     obj
                 })
                 .collect::<js_sys::Array>();
-            let _ = Reflect::set(&error, &"syntax_errors".into(), &errors);
+            let _ = Reflect::set(&error, &"syntaxErrors".into(), &errors);
             error.into()
         }
         _ => js_sys::Error::new("Unknown error").into(),
