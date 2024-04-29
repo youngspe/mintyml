@@ -73,3 +73,19 @@ fn interpolation_curly_double() {
         )
     )
 }
+
+#[test]
+fn interpolation_curly_double_follows_single_word() {
+    let src = r#"
+        foo {{ </bar/> }}
+    "#;
+
+    let out = convert_unwrap(src, None);
+
+    assert_eq!(
+        out,
+        concat!(
+            r#"<p>foo {{ </bar/> }}</p>"#,
+        )
+    )
+}

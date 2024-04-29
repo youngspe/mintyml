@@ -109,7 +109,9 @@ gramma::define_token!(
 
     #[pattern(matcher = {
         text_word()
-            + !precedes(space().repeat(..).simple() + char(">{["))
+            + !precedes(space().repeat(..).simple() + (
+                char(">[")) | char('{') + char(('}', whitespace()))
+            )
             + repeat(.., space() + text_word()).simple()
     })]
     /// Matches any part of a paragraph line that is not an element.
