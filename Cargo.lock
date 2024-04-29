@@ -224,7 +224,7 @@ checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
 
 [[package]]
 name = "minty-wasm"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "js-sys",
  "mintyml",
@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "mintyml"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "either",
  "gramma",
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "mintyml-cli"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "clap",
