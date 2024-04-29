@@ -75,10 +75,11 @@ impl<'src> ToStatic for Document<'src> {
 }
 
 /// Represents some kind of whitespace that should be considered when converting to HTML.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Space {
     /// Whitespace between elements on the same line.
+    #[default]
     Inline,
     /// Whitespace between lines of a paragraph.
     LineEnd,
@@ -91,9 +92,31 @@ pub enum Space {
 #[non_exhaustive]
 pub struct Text<'src> {
     pub value: Src<'src>,
+    pub range: LocationRange,
     pub escape: bool,
     pub multiline: bool,
     pub raw: bool,
+}
+
+/// Represents comment contents.
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub struct Comment<'src> {
+    pub value: Src<'src>,
+    pub range: LocationRange,
+}
+
+impl<'src> ToStatic for Comment<'src> {
+    type Static = Comment<'static>;
+
+    fn to_static(self) -> Self::Static {
+        match self {
+            Self { value, range } => Self::Static {
+                value: value.to_static(),
+                range,
+            },
+        }
+    }
 }
 
 /// Represents a MinTyML node, which roughly corresponds to an HTML element.
@@ -105,13 +128,15 @@ pub struct Node<'src> {
 }
 
 /// The internal data of a MinTyML node.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum NodeType<'src> {
     Element(Element<'src>),
     Text(Text<'src>),
-    Comment(Src<'src>),
+    Comment(Comment<'src>),
     Space(Space),
+    #[default]
+    Unknown,
 }
 
 impl<'src> From<Text<'src>> for NodeType<'src> {
@@ -129,6 +154,12 @@ impl<'src> From<Space> for NodeType<'src> {
 impl<'src> From<Element<'src>> for NodeType<'src> {
     fn from(v: Element<'src>) -> Self {
         Self::Element(v)
+    }
+}
+
+impl<'src> From<Comment<'src>> for NodeType<'src> {
+    fn from(v: Comment<'src>) -> Self {
+        Self::Comment(v)
     }
 }
 
@@ -151,17 +182,20 @@ impl<'src> ToStatic for NodeType<'src> {
             NodeType::Element(x) => NodeType::Element(x.to_static()),
             NodeType::Text(Text {
                 value,
+                range,
                 escape,
                 multiline,
                 raw,
             }) => NodeType::Text(Text {
                 value: value.to_static(),
+                range,
                 escape,
                 multiline,
                 raw,
             }),
             NodeType::Comment(x) => NodeType::Comment(x.to_static()),
             NodeType::Space(x) => NodeType::Space(x),
+            NodeType::Unknown => NodeType::Unknown,
         }
     }
 }
@@ -189,6 +223,7 @@ pub struct Element<'src> {
     /// If true, escape sequences within this element should be converted as-is.
     pub is_raw: bool,
     pub mode: ContentMode,
+    pub content_range: Option<LocationRange>,
 }
 
 impl<'src> Element<'src> {
@@ -209,6 +244,7 @@ impl<'src> ToStatic for Element<'src> {
             kind: self.kind,
             is_raw: self.is_raw,
             mode: self.mode,
+            content_range: self.content_range,
         }
     }
 }
@@ -620,6 +656,7 @@ fn get_multiline_text<'src, const ESCAPE: bool>(
         range,
         node_type: Text {
             value,
+            range,
             escape,
             multiline: true,
             ..default()
@@ -694,6 +731,7 @@ fn build_verbatim_text<'src>(
 
     Ok(Text {
         value: cx.slice(range),
+        range,
         raw: v.raw.is_some(),
         ..default()
     }
@@ -748,6 +786,7 @@ fn build_inline_special<'src>(
                 range: code.range,
                 node_type: Text {
                     value: cx.slice(range),
+                    range,
                     ..default()
                 }
                 .into(),
@@ -811,6 +850,7 @@ fn build_text_line_part<'src>(
             range: text.range,
             node_type: Text {
                 value: cx.escapable_slice(text.range)?,
+                range: text.range,
                 escape: true,
                 ..default()
             }
@@ -834,18 +874,15 @@ fn build_text_line_part<'src>(
                     element: ast::Element::WithSelector { selector, body },
                 } => Element {
                     selector: Selector::build_from_ast(cx, selector)?,
-                    nodes: build_element_body(cx, body)?,
                     kind: ElementKind::Inline(Some(get_delimiter(body))),
-                    ..default()
+                    ..build_element_body(cx, body)?
                 }
                 .into(),
                 ast::NodeType::Element {
                     element: ast::Element::Body { body },
                 } => Element {
-                    selector: default(),
-                    nodes: build_element_body(cx, body)?,
                     kind: ElementKind::Inline(Some(get_delimiter(body))),
-                    ..default()
+                    ..build_element_body(cx, body)?
                 }
                 .into(),
                 ast::NodeType::Paragraph { paragraph } => Element {
@@ -898,7 +935,7 @@ fn build_paragraph<'src>(
     })
 }
 
-fn build_element_body<'src>(
+fn build_child_nodes<'src>(
     cx: &mut BuildContext<'src>,
     ast: &ast::ElementBody,
 ) -> BuildResult<Vec<Node<'src>>> {
@@ -928,6 +965,28 @@ fn build_element_body<'src>(
     }
 }
 
+fn build_element_body<'src>(
+    cx: &mut BuildContext<'src>,
+    body: &ast::ElementBody,
+) -> BuildResult<Element<'src>> {
+    let content_range = match body {
+        ast::ElementBody::Block { block, .. } | ast::ElementBody::LineBlock { block, .. } => {
+            Some(LocationRange {
+                start: block.l_brace.range.end,
+                end: block.r_brace.range.start,
+            })
+        }
+        _ => None,
+    };
+
+    Ok(Element {
+        nodes: build_child_nodes(cx, body)?,
+        kind: get_default_kind(body),
+        content_range,
+        ..default()
+    })
+}
+
 fn build_element<'src>(
     cx: &mut BuildContext<'src>,
     ast: &ast::Element,
@@ -935,16 +994,9 @@ fn build_element<'src>(
     match ast {
         ast::Element::WithSelector { selector, body } => Ok(Element {
             selector: Selector::build_from_ast(cx, selector)?,
-            nodes: build_element_body(cx, body)?,
-            kind: get_default_kind(body),
-            ..default()
+            ..build_element_body(cx, body)?
         }),
-        ast::Element::Body { body } => Ok(Element {
-            selector: default(),
-            nodes: build_element_body(cx, body)?,
-            kind: get_default_kind(body),
-            ..default()
-        }),
+        ast::Element::Body { body } => build_element_body(cx, body),
     }
 }
 
@@ -963,13 +1015,15 @@ fn build_non_paragraph_node<'src>(
 ) -> BuildResult<NodeType<'src>> {
     match node_type {
         ast::NonParagraphNodeType::Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
-        ast::NonParagraphNodeType::Comment { comment } => {
-            Ok(NodeType::Comment(cx.slice(comment.inner)))
-        }
+        ast::NonParagraphNodeType::Comment { comment } => Ok(NodeType::Comment(Comment {
+            value: cx.slice(comment.inner),
+            range: comment.inner,
+        })),
         ast::NonParagraphNodeType::Interpolation { interpolation } => Ok(NodeType::Text(Text {
             escape: false,
             raw: true,
             value: cx.slice(interpolation.range),
+            range: interpolation.range,
             ..default()
         })),
     }

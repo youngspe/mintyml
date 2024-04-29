@@ -376,7 +376,7 @@ where
             NodeType::Text(text) if text.value.is_empty() => {}
             NodeType::Text(text) => {
                 let escape = text.escape;
-                let is_raw = text.raw || self.element.is_raw;
+                let is_raw = !self.is_xml() && (text.raw || self.element.is_raw);
                 let mut write = |value| match (escape, is_raw) {
                     (true, true) => self.write_unescape(value),
                     (true, false) => self.write_escape_unescape(value, false),
@@ -397,9 +397,9 @@ where
 
                 self.follows_space = last_line.ends_with([' ', '\t']);
             }
-            NodeType::Comment(s) => {
+            NodeType::Comment(comment) => {
                 self.out.write_str("<!--")?;
-                self.write_escape(s, false)?;
+                self.write_escape(&comment.value, false)?;
                 self.out.write_str("-->")?;
                 self.follows_space = false;
             }
@@ -407,6 +407,7 @@ where
                 self.space(*space)?;
                 self.follows_space = true
             }
+            NodeType::Unknown => {}
         };
 
         Ok(out)

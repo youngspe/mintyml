@@ -18,6 +18,7 @@ use clap::{
     value_parser, ArgAction, Args, Parser, Subcommand, ValueEnum,
 };
 use key_value::KeyValueParser;
+use mintyml::MetadataConfig;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use utils::UtilExt as _;
 
@@ -110,7 +111,11 @@ struct ConvertOptions {
     /// (e.g. `title`, `meta`, `style`), and a `body` element will be created containing all other top-level elements.
     ///
     /// [default: true]
-    #[arg(long, num_args = 0..=1, default_missing_value = "true", require_equals = true, action = ArgAction::Set, hide_default_value = false)]
+    #[arg(
+        long, num_args = 0..=1, value_name = "ENABLE",
+        require_equals = true, action = ArgAction::Set,
+        default_missing_value = "true",
+    )]
     complete_page: Option<bool>,
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.
     /// Equivalent to `--complete-page=false`
@@ -129,6 +134,24 @@ struct ConvertOptions {
         value_delimiter = ','
     )]
     special_tag: Vec<(SpecialTag, String)>,
+
+    /// If enabled, parsing metadata will be added to the output.
+    #[arg(
+        long, num_args = 0..=1, value_name = "ENABLE",
+        require_equals = true, action = ArgAction::Set,
+        default_missing_value = "true",
+    )]
+    metadata: Option<bool>,
+
+    /// Generate elements for nodes that don't correspond directly to HTML elements,
+    /// like comments and text segments.
+    /// Implies `--metadata`
+    #[arg(
+        long, num_args = 0..=1, value_name = "ENABLE",
+        require_equals = true, action = ArgAction::Set,
+        default_missing_value = "true", overrides_with = "metadata",
+    )]
+    metadata_elements: Option<bool>,
 }
 
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq)]
@@ -303,6 +326,25 @@ impl Convert {
                     };
                     *target = Some(value.into())
                 }
+            })
+            .update(|config| {
+                match options {
+                    ConvertOptions {
+                        metadata: None | Some(true),
+                        metadata_elements: Some(_),
+                        ..
+                    }
+                    | ConvertOptions {
+                        metadata: Some(true),
+                        ..
+                    } => {
+                        config.metadata = MetadataConfig::new()
+                            .elements(options.metadata_elements.unwrap_or(false))
+                            .some();
+                    }
+                    _ => {}
+                }
+                if options.metadata_elements.is_some() || options.metadata == Some(true) {}
             })
     }
 

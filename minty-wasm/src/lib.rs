@@ -5,7 +5,7 @@ extern crate wasm_bindgen;
 
 use alloc::{format, string::String};
 use js_sys::{JsString, Reflect};
-use mintyml::{ConvertError, OutputConfig};
+use mintyml::{ConvertError, MetadataConfig, OutputConfig};
 use wasm_bindgen::prelude::*;
 
 fn to_js_error(e: ConvertError) -> JsValue {
@@ -63,8 +63,38 @@ fn to_js_error(e: ConvertError) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn convert(src: &str, xml: bool, indent: i32, complete_page: bool) -> Result<String, JsValue> {
+pub fn convert(
+    src: &str,
+    xml: bool,
+    indent: i32,
+    complete_page: bool,
+    special_tags: JsValue,
+    metadata: JsValue,
+) -> Result<String, JsValue> {
     let mut config = OutputConfig::new().xml(xml).complete_page(complete_page);
+
+    if special_tags.is_object() {
+        let field = |key: &str| {
+            Reflect::get(&special_tags, &key.into()).map(|j| j.as_string().map(Into::into))
+        };
+
+        config.special_tags.emphasis = field("emphasis")?;
+        config.special_tags.strong = field("strong")?;
+        config.special_tags.underline = field("underline")?;
+        config.special_tags.strike = field("strike")?;
+        config.special_tags.quote = field("quote")?;
+        config.special_tags.code = field("code")?;
+        config.special_tags.code_block_container = field("codeBlockContainer")?;
+    }
+
+    if metadata.is_truthy() {
+        let mut metadata_config = MetadataConfig::new();
+        if metadata.is_object() {
+            metadata_config.elements = Reflect::get(&metadata, &"elements".into())?.is_truthy();
+        }
+        config.metadata = metadata_config.into();
+    }
+
     if indent >= 0 {
         config.indent = Some(
             core::iter::repeat(' ')

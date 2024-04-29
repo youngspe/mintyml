@@ -25,7 +25,7 @@ use core::{borrow::Borrow, fmt};
 use document::{Document, Src, ToStatic};
 use output::OutputError;
 
-pub use config::{OutputConfig, SpecialTagConfig};
+pub use config::{MetadataConfig, OutputConfig, SpecialTagConfig};
 pub use document::{SyntaxError, SyntaxErrorKind};
 
 /// Represents an error that occurred while converting MinTyML.
@@ -160,6 +160,9 @@ pub fn convert_to<'src>(
     transform::infer_elements::infer_elements(&mut document, &config.special_tags);
     transform::apply_lang(&mut document, &config.lang);
 
+    if let Some(ref metadata) = config.metadata {
+        transform::metadata::add_metadata(&mut document, metadata);
+    }
 
     output::output_html_to(&document, out, config).map_err(|e| match e {
         OutputError::WriteError(fmt::Error) => ConvertError::Unknown,

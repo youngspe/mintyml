@@ -22,11 +22,12 @@ test-cli:
     just do minty-wasm build-wasm-{{ VARIANT }}
 
 install-node:
-    #!/usr/bin/env pwsh
-    $ErrorActionPreference = 'Stop'
-    Import-Module ./build-utils.psm1
-    Build-NodeManifest
-    just do minty-wasm install
+    pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
+    Import-Module ./build-utils.psm1; \
+    Build-NodeManifest; \
+    just do minty-wasm install; \
+    '
 
 @build-node-tsc: install-node
     just do minty-wasm build-tsc
@@ -50,24 +51,28 @@ build-cli:
 
 publish-packages:
     pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
     Publish-Packages -Publish; \
     '
 
 publish-release:
     pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
     Publish-Release -Publish; \
     '
 
 build-release:
     pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
     Build-Release; \
     '
 
 update-readme:
     pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
     Import-Module ./doc-utils.psm1; \
     Build-ReadmeDotMd; \
     Build-ExampleIntro; \

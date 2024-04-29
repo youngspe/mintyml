@@ -71,23 +71,44 @@ export interface MintymlConverterOptions {
      * @default false
      */
     completePage: boolean
+
+    specialTags: Partial<{
+        emphasis: string | null
+        strong: string | null
+        underline: string | null
+        strike: string | null
+        quote: string | null
+        code: string | null
+        codeBlockContainer: string | null
+    } | null> | null
+
+    /** If provided, parsing metadata will be added to the output. */
+    metadata: boolean | Partial<{
+        /**
+         * Generate elements for nodes that don't correspond directly to HTML elements,
+         * like comments and text segments.
+         */
+        elements: boolean
+    }> | null
 }
 
 /** Converts MinTyML source to HTML. */
 export class MintymlConverter implements MintymlConverterOptions {
-    xml; indent; completePage
+    xml; indent; completePage; specialTags; metadata
 
     constructor(options: Partial<MintymlConverterOptions> = {}) {
         this.xml = options.xml ?? false
         this.indent = options.indent ?? null
         this.completePage = options.completePage ?? false
+        this.specialTags = options.specialTags ?? null
+        this.metadata = options.metadata ?? null
     }
 
     /** Converts the given MinTyML string to HTML. */
     async convert(src: string): Promise<string> {
         const mintyml = await _mintyml
         try {
-            return mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage)
+            return mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage, this.specialTags, this.metadata)
         } catch (e) {
             const err = e as MintymlError
 

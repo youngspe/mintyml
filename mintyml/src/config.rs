@@ -22,6 +22,30 @@ pub struct SpecialTagConfig<'src> {
     pub code_block_container: Option<Src<'src>>,
 }
 
+/// Configuration options for document parsing metadata.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone)]
+pub struct MetadataConfig {
+    /// Generate elements for nodes that don't correspond directly to HTML elements,
+    /// like comments and text segments.
+    pub elements: bool,
+}
+
+impl MetadataConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Generate elements for nodes that don't correspond directly to HTML elements,
+    /// like comments and text segments.
+    pub fn elements(self, enable: bool) -> Self {
+        Self {
+            elements: enable,
+            ..self
+        }
+    }
+}
+
 /// Configuration options for converting a MinTyML document.
 #[non_exhaustive]
 #[derive(Debug, Default, Clone)]
@@ -43,6 +67,8 @@ pub struct OutputConfig<'src> {
     ///
     /// This is most useful when `complete_page` is enabled so that the root element has a `lang` attribute.
     pub lang: Option<Src<'src>>,
+    /// If provided, parsing metadata will be added to the output.
+    pub metadata: Option<MetadataConfig>,
 }
 
 impl<'src> OutputConfig<'src> {
@@ -171,5 +197,13 @@ impl<'src> OutputConfig<'src> {
     /// This is most useful when `complete_page` is enabled so that the root element has a `lang` attribute.
     pub fn lang(self, lang: impl Into<Src<'src>>) -> Self {
         self.update(|c| c.lang = lang.into().into())
+    }
+
+    /// If provided, parsing metadata will be added to the output.
+    pub fn metadata(self, config: MetadataConfig) -> Self {
+        Self {
+            metadata: config.into(),
+            ..self
+        }
     }
 }
