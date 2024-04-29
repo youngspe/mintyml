@@ -231,3 +231,25 @@ body>header.tool-bar h1 {
 #view-out {
     flex: 1;
 }
+
+.page-footer {
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.github-link::before {
+    display: inline-block;
+    content: "";
+    background-image: url("/public/icon/github-mark.svg");
+    block-size: 0.75em;
+    inline-size: 0.75em;
+    background-size: contain;
+    transform: scale(1.5);
+    margin-inline: 0.5em;
+
+    @media (prefers-color-scheme: dark) {
+        background-image: url("/public/icon/github-mark-white.svg");
+    }
+}
