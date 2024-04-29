@@ -474,7 +474,7 @@
         </tr>
       </thead>
       <tr>
-        <td><pre><code>&lt;[#[A verbatim segment may look like this: &lt;[[ ... ]]&gt;]#]&gt;&NewLine;&lt;[##[or like this: &lt;[#[ ... ]#]&gt;]##]&gt;&NewLine;or even like this: ]##]\&gt;</code></pre></td>
+        <td><pre><code>&lt;[#[A verbatim segment may look like this: &lt;[[ ... ]]&gt;]#]&gt;&NewLine;&lt;[##[or like this: &lt;[#[ ... ]#]&gt;]##]&gt;&NewLine;or even like this: \&lt;\[##\[ ... \]##\]\&gt;</code></pre></td>
         <td>
           A verbatim segment may look like this: &lt;[[ ... ]]&gt;
           or like this: &lt;[#[ ... ]#]&gt;
@@ -531,6 +531,36 @@
     </tr>
   </table>
 </div>
+<h4>Template Interpolation Segment</h4>
+<p>Segments of text that resemble some common interpolation tags for template languages will remain unchanged so the MinTyML source can be compiled to an HTML template.</p>
+<p>The following delimiters mark interpolations that will be unchanged:</p>
+<table>
+  <thead>
+    <th>Open</th> <th>Close</th> <tr>
+      Usage examples
+    </tr>
+  </thead>
+  <tr>
+    <td><code>{{</code></td>
+    <td><code>}}</code></td>
+    <td>Angular, Handlebars, Liquid</td>
+  </tr>
+  <tr>
+    <td><code>{%</code></td>
+    <td><code>%}</code></td>
+    <td>Liquid</td>
+  </tr>
+  <tr>
+    <td><code>&lt;%</code></td>
+    <td><code>%&gt;</code></td>
+    <td>Embedded Ruby</td>
+  </tr>
+  <tr>
+    <td><code>&lt;?</code></td>
+    <td><code>?&gt;</code></td>
+    <td>PHP</td>
+  </tr>
+</table>
 <h3>Code Block</h3>
 <p>A <i>code block</i> closely resembles a <a href="#Plaintext-Block">plaintext block</a>, but it begins and ends with backticks (<code>```</code>) rather than quotation marks. It differs from the single-quoted plaintext block in that the contents are wrapped in a <code>code</code> element within a <code>pre</code> element. This means it will usually be rendered in a monospace font, and whitespace will not be ignored. A code block is equivalent to a single-quoted plaintext block following <code>pre&gt;code&gt;</code></p>
 <div class="scroll-x box">

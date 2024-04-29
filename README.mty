@@ -751,13 +751,13 @@ aside>figure>table {
     > ```
     <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
     <[##[or like this: <[#[ ... ]#]>]##]>
-    or even like this: ]##]\>
+    or even like this: \<\[##\[ ... \]##\]\>
     ```
 
     {
       <[#[A verbatim segment may look like this: <[[ ... ]]>]#]>
       <[##[or like this: <[#[ ... ]#]>]##]>
-      or even like this: \<[##[ ... ]##]\>
+      or even like this: \<\[##\[ ... \]##\]\>
     }
   }
   caption> Verbatim segments using the alternate delimiters.
@@ -778,7 +778,7 @@ may also be used when case the text may contain <`]]>`> or <`]#]>`>.
     Hello, world!
     ```
 
-    {.result {
+    { .result {
       <[[Hello, world!]]>
     }}
   }
@@ -796,7 +796,7 @@ may also be used when case the text may contain <`]]>`> or <`]#]>`>.
     </pre>
     ```
 
-    {.result {
+    { .result {
       pre {
         <[[Hello,
 world!]]>
@@ -813,7 +813,7 @@ world!]]>
     Hello,\nworld!
     ```
 
-    {.result {
+    { .result {
     <[[Hello,\nworld!]]>
     }}
   }
@@ -826,9 +826,41 @@ world!]]>
     Hello, &lt;/world/&gt;!
     ```
 
-    {.result {
+    { .result {
     <[[Hello, </world/>!]]>
     }}
+  }
+}
+
+h4> Template Interpolation Segment
+
+Segments of text that resemble some common interpolation tags for template languages
+will remain unchanged so the MinTyML source can be compiled to an HTML template.
+
+The following delimiters mark interpolations that will be unchanged:
+
+table {
+  thead> <(th> Open)> <(th> Close)> <(Usage examples)>
+
+  {
+    > <`{{`>
+    > <`}}`>
+    > Angular, Handlebars, Liquid
+  }
+  {
+    > <`{%`>
+    > <`%}`>
+    > Liquid
+  }
+  {
+    > <`<%`>
+    > <`%>`>
+    > Embedded Ruby
+  }
+  {
+    > <`<?`>
+    > <`?>`>
+    > PHP
   }
 }
 

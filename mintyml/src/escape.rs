@@ -68,7 +68,7 @@ pub fn unescape_parts<'src>(
                     .and_then(char::from_u32)
                     .ok_or(())
             }
-            ch @ ('<' | '>' | '{' | '}' | '"' | '\'' | '\\') => Ok(ch),
+            ch @ ('<' | '>' | '{' | '}' | '"' | '\'' | '\\' | '[' | ']') => Ok(ch),
             _ => Err(()),
         };
 

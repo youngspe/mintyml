@@ -108,7 +108,9 @@ gramma::define_token!(
     pub struct ClassName;
 
     #[pattern(matcher = {
-        text_word() + repeat(.., space() + text_word()).simple()
+        text_word()
+            + !precedes(space().repeat(..).simple() + char(">{["))
+            + repeat(.., space() + text_word()).simple()
     })]
     /// Matches any part of a paragraph line that is not an element.
     pub struct TextSegment;
@@ -507,16 +509,30 @@ fn text_segment_cannot_start_with_whitespace() {
 }
 
 #[test]
-fn text_segment_alphanumeric_lexes_before_gt() {
+fn text_segment_alphanumeric_word_fails_before_gt() {
     let src = ["abc1> ", "abcd> "];
 
     for src in src {
         assert_eq!(
-            TextSegment::try_lex(src, Location { position: 0 }).unwrap(),
-            LocationRange {
+            TextSegment::try_lex(src, Location { position: 0 }),
+            None,
+            "for {src:?}"
+        );
+    }
+}
+
+#[test]
+fn text_segment_alphanumeric_multi_word_lexes_before_gt() {
+    let src = ["abc1 abc1> ", "abcd abcd> "];
+
+    for src in src {
+        assert_eq!(
+            TextSegment::try_lex(src, Location { position: 0 }),
+            Some(LocationRange {
                 start: Location { position: 0 },
-                end: Location { position: 4 },
-            },
+                end: Location { position: 9 },
+            }),
+            "for {src:?}"
         );
     }
 }
@@ -638,7 +654,7 @@ section {
     }
 }
     "#;
-    let _ast = parse_tree::<Document, 3>(src).unwrap();
+    let _ast = parse_tree::<Document, 2>(src).unwrap();
     #[cfg(feature = "std")]
     {
         ::std::println!("{:#}", gramma::display_tree(src, &_ast));
