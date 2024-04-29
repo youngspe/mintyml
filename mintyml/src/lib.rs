@@ -8,7 +8,7 @@ extern crate alloc;
 extern crate either;
 extern crate gramma;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "error-trait")]
 extern crate thiserror;
 
 pub(crate) mod ast;
@@ -31,16 +31,16 @@ pub use document::{SyntaxError, SyntaxErrorKind};
 /// Represents an error that occurred while converting MinTyML.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
 pub enum ConvertError<'src> {
     /// The conversion failed due to one or more syntax errors.
-    #[cfg_attr(feature = "std", error("{}", utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
+    #[cfg_attr(feature = "error-trait", error("{}", utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
     Syntax {
         syntax_errors: Vec<SyntaxError>,
         src: Src<'src>,
     },
     /// The conversion failed for some other reason.
-    #[cfg_attr(feature = "std", error("Unknown"))]
+    #[cfg_attr(feature = "error-trait", error("Unknown"))]
     Unknown,
 }
 

@@ -322,7 +322,7 @@ pub enum ElementKind {
     Inline(
         /// The syntax used to define the element inside the inline delimiters
         /// e.g. `<(b> text)>`, `<(b> { text })>`, `<(b { text })>`, `<(text)>`
-        Option<ElementDelimiter>
+        Option<ElementDelimiter>,
     ),
     /// An element implicitly defined by a group of consecutive lines of text.
     /// Depending on inference, it may correspond to a text node rather than an HTML element.
@@ -337,7 +337,7 @@ struct BuildError {}
 /// Represents a syntax error in the MinTyML source.
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "std", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
+#[cfg_attr(feature = "error-trait", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
 pub struct SyntaxError {
     /// The [LocationRange] encapsulating the syntax error.
     pub range: LocationRange,
@@ -465,7 +465,7 @@ fn slice_str<'src>(src: &'src str, LocationRange { start, end }: LocationRange) 
         .into()
 }
 
-type BuildResult<T> = Result<T, BuildError>;
+type BuildResult<T = ()> = Result<T, BuildError>;
 
 impl<'src> Document<'src> {
     fn build_from_ast(cx: &mut BuildContext<'src>, ast: &ast::Document) -> BuildResult<Self> {
@@ -501,9 +501,52 @@ impl<'src> Document<'src> {
 }
 
 impl<'src> Selector<'src> {
+    fn build_attributes(
+        cx: &mut BuildContext<'src>,
+        attributes: &ast::AttributeSelector,
+        out: &mut Vec<Attribute<'src>>,
+    ) -> BuildResult {
+        for attr in &attributes.parts {
+            let name = cx.escapable_slice(attr.name.range)?;
+
+            let value = attr
+                .assignment
+                .as_ref()
+                .map(|a| match &a.value {
+                    ast::AttributeValue::Unquoted { value } => value.range,
+                    ast::AttributeValue::Quoted { value } => {
+                        let mut range = value.range;
+
+                        const QUOTE_LEN: usize = {
+                            if '"'.len_utf8() != '\''.len_utf8() {
+                                panic!();
+                            }
+                            '"'.len_utf8()
+                        };
+
+                        range.start += QUOTE_LEN;
+                        range.end -= QUOTE_LEN;
+                        range
+                    }
+                })
+                .map(|range| cx.escapable_slice(range))
+                .transpose()?;
+
+            out.push(Attribute { name, value });
+        }
+        Ok(())
+    }
+
     fn build_from_ast(
         cx: &mut BuildContext<'src>,
-        ast::Selector { element, parts }: &ast::Selector,
+        ast::Selector {
+            start:
+                ast::SelectorStart {
+                    element,
+                    class_like,
+                },
+            segments,
+        }: &ast::Selector,
     ) -> BuildResult<Self> {
         let element = match element {
             Some(ast::ElementSelector::Name { name }) => {
@@ -511,48 +554,27 @@ impl<'src> Selector<'src> {
             }
             None | Some(ast::ElementSelector::Star { .. }) => SelectorElement::Infer,
         };
+        let mut out = Self::from(element);
 
-        parts.iter().try_fold(Self::from(element), |mut out, part| {
+        for part in class_like
+            .iter()
+            .chain(segments.iter().flat_map(|s| &s.class_like))
+        {
             match part {
-                ast::SelectorPart::Attribute { value } => {
-                    for attr in &value.parts {
-                        let name = cx.escapable_slice(attr.name.range)?;
-
-                        let value = attr
-                            .assignment
-                            .as_ref()
-                            .map(|a| match &a.value {
-                                ast::AttributeValue::Unquoted { value } => value.range,
-                                ast::AttributeValue::Quoted { value } => {
-                                    let mut range = value.range;
-
-                                    const QUOTE_LEN: usize = {
-                                        if '"'.len_utf8() != '\''.len_utf8() {
-                                            panic!();
-                                        }
-                                        '"'.len_utf8()
-                                    };
-
-                                    range.start += QUOTE_LEN;
-                                    range.end -= QUOTE_LEN;
-                                    range
-                                }
-                            })
-                            .map(|range| cx.escapable_slice(range))
-                            .transpose()?;
-
-                        out.attributes.push(Attribute { name, value });
-                    }
-                }
-                ast::SelectorPart::ClassSelector { value } => {
+                ast::ClassLike::Class { value } => {
                     out.class_names.push(cx.escapable_slice(value.ident.range)?);
                 }
-                ast::SelectorPart::IdSelector { value } => {
+                ast::ClassLike::Id { value } => {
                     out.id = Some(cx.escapable_slice(value.ident.range)?);
                 }
             }
-            Ok(out)
-        })
+        }
+
+        for attributes in segments.iter().map(|s| &s.attributes) {
+            Self::build_attributes(cx, attributes, &mut out.attributes)?;
+        }
+
+        Ok(out)
     }
 }
 
@@ -944,6 +966,12 @@ fn build_non_paragraph_node<'src>(
         ast::NonParagraphNodeType::Comment { comment } => {
             Ok(NodeType::Comment(cx.slice(comment.inner)))
         }
+        ast::NonParagraphNodeType::Interpolation { interpolation } => Ok(NodeType::Text(Text {
+            escape: false,
+            raw: true,
+            value: cx.slice(interpolation.range),
+            ..default()
+        })),
     }
 }
 
@@ -1005,7 +1033,7 @@ fn document_demo() {
         }
     "#;
     let _doc = Document::parse(src).unwrap();
-    #[cfg(feature = "std")]
+    #[cfg(feature = "error-trait")]
     {
         ::std::println!("{:#?}", _doc);
     }

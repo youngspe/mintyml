@@ -17,6 +17,7 @@ rayon = "1.8.1"
 [dependencies.mintyml]
 path = "../mintyml"
 version = "0.1"
+features = ["error-trait"]
 
 [profile.release]
 strip = true

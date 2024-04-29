@@ -1,5 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 use gramma::parse::{Location, LocationRange};
+#[cfg(test)]
+use gramma::Token;
 
 gramma::define_string_pattern!(
     fn unicode_escape() {
@@ -19,7 +21,7 @@ gramma::define_string_pattern!(
     }
 
     fn class_name() {
-        (identifier_char() | char("!@$%^&*+=_/?();") + !precedes(char('>')))
+        (!char(("\\{}[]()<>`~!@#$%^&*+=,./?\"'|; \t\r\n", whitespace())))
             .repeat(1..)
             .simple()
     }
@@ -31,6 +33,43 @@ gramma::define_string_pattern!(
 
     fn element_name() {
         !precedes(ascii_digit()) + identifier()
+    }
+
+    fn interpolation() {
+        !follows(char("\\{"))
+            + exactly("{{")
+            + !precedes(char('{'))
+            + char(..).repeat(..).lazy()
+            + !follows(char("\\}"))
+            + exactly("}}")
+            + !precedes(char('}'))
+            | exactly("{%") + char(..).repeat(..).lazy() + exactly("%}")
+            | exactly("<%") + char(..).repeat(..).lazy() + exactly("%>")
+            | exactly("<?") + char(..).repeat(..).lazy() + exactly("?>")
+    }
+
+    fn space() {
+        repeat(1.., whitespace() & !char('\n')).simple()
+    }
+
+    fn text_word() {
+        repeat(
+            1..,
+            (!char("\\[]{}<> \n\r\t") & !whitespace()) + !precedes(char('>'))
+                | alphanumeric()
+                | escape(),
+        )
+        .simple()
+    }
+
+    fn selector_chain() {
+        repeat(
+            1..,
+            (!char("\\[]{}<> \n\r\t") & !whitespace()) + !precedes(char('>'))
+                | char((alphanumeric(), "*"))
+                | escape(),
+        )
+        .simple()
     }
 );
 
@@ -69,15 +108,7 @@ gramma::define_token!(
     pub struct ClassName;
 
     #[pattern(matcher = {
-        precedes(!whitespace())
-        + (
-            (whitespace() & !char('\n')).repeat(..).simple()
-            + (
-                !char("\\{}<>()@#$^&*?~_[]|/-+=\"'`!,.") & !whitespace()
-                | char("()@#$^&*?~_[]|/-+=\"'`!,.") + !precedes(char('>'))
-                | escape()
-            ).repeat(1..).simple()
-        ).repeat(1..).simple()
+        text_word() + repeat(.., space() + text_word()).simple()
     })]
     /// Matches any part of a paragraph line that is not an element.
     pub struct TextSegment;
@@ -102,16 +133,12 @@ gramma::define_token!(
     pub struct Whitespace;
 
     #[pattern(matcher = {
-        // Element type
-        (char('*') | element_name()).optional().simple()
-         +(
-            // Id/class
-            char(".#").repeat(1..).simple() + class_name()
-            // Attribute
-            | char('[') + (!char("[]\\\"'") | attr_string() | escape()).repeat(..).simple() + char(']')
-        ).repeat(..)
+        selector_chain() + precedes(
+            char(" \t").repeat(..).simple() + char(">{")
+            | char('[')
+        )
     })]
-    pub struct SelectorString;
+    pub struct SelectorChain;
 
     #[pattern(matcher = {
         repeat(1.., !char(("=>'\"/[]\\", whitespace())) | escape()).simple()
@@ -212,13 +239,17 @@ gramma::define_token!(
         + line_start() + char(" \t").repeat(..).simple() + exactly("```")
     })]
     pub struct MultilineCode;
+
+    #[pattern(matcher = interpolation())]
+    pub struct Interpolation;
 );
 
 gramma::define_rule!(
     pub struct Block {
         pub l_brace: LeftBrace,
-        #[transform(ignore_around<Whitespace>)]
+        #[transform(map<discard_before<Whitespace>>)]
         pub nodes: Option<Nodes>,
+        #[transform(ignore_before<Whitespace>)]
         pub r_brace: RightBrace,
     }
 
@@ -357,6 +388,7 @@ gramma::define_rule!(
     pub enum NonParagraphNodeType {
         Verbatim { verbatim: Verbatim },
         Comment { comment: Comment },
+        Interpolation { interpolation: Interpolation },
     }
 
     pub struct Node {
@@ -378,16 +410,26 @@ gramma::define_rule!(
         pub nodes: Vec<Node>,
     }
 
-    #[transform(parse_as<SelectorString>)]
     pub struct Selector {
-        pub element: Option<ElementSelector>,
-        pub parts: Vec<SelectorPart>,
+        pub start: SelectorStart,
+        pub segments: Vec<SelectorSegment>,
     }
 
-    pub enum SelectorPart {
-        Attribute { value: AttributeSelector },
-        ClassSelector { value: ClassSelector },
-        IdSelector { value: IdSelector },
+    #[transform(parse_as<Option<SelectorChain>>)]
+    pub struct SelectorStart {
+        pub element: Option<ElementSelector>,
+        pub class_like: Vec<ClassLike>,
+    }
+
+    pub struct SelectorSegment {
+        pub attributes: AttributeSelector,
+        #[transform(parse_as<Option<SelectorChain>>)]
+        pub class_like: Vec<ClassLike>,
+    }
+
+    pub enum ClassLike {
+        Class { value: ClassSelector },
+        Id { value: IdSelector },
     }
 
     pub enum ElementSelector {
@@ -436,6 +478,92 @@ gramma::define_rule!(
         pub end: Location,
     }
 );
+
+#[test]
+fn text_segment_excludes_line_breaks() {
+    let src = ["foo\nbar", "foo\n bar", "foo \n bar", "foo \nbar"];
+
+    for src in src {
+        assert_eq!(
+            TextSegment::try_lex(src, Location { position: 0 }).unwrap(),
+            LocationRange {
+                start: Location { position: 0 },
+                end: Location { position: 3 },
+            },
+        );
+    }
+}
+
+#[test]
+fn text_segment_cannot_start_with_whitespace() {
+    assert!(TextSegment::try_lex(" foo", Location { position: 0 }).is_none());
+    assert_eq!(
+        TextSegment::try_lex(" foo", Location { position: 1 }).unwrap(),
+        LocationRange {
+            start: Location { position: 1 },
+            end: Location { position: 4 },
+        },
+    );
+}
+
+#[test]
+fn text_segment_alphanumeric_lexes_before_gt() {
+    let src = ["abc1> ", "abcd> "];
+
+    for src in src {
+        assert_eq!(
+            TextSegment::try_lex(src, Location { position: 0 }).unwrap(),
+            LocationRange {
+                start: Location { position: 0 },
+                end: Location { position: 4 },
+            },
+        );
+    }
+}
+
+#[test]
+fn text_segment_non_alphanumeric_before_gt_excluded() {
+    let src = ["abc)> ", "abc?> ", "abc,>>\n"];
+
+    for src in src {
+        assert_eq!(
+            TextSegment::try_lex(src, Location { position: 0 }),
+            Some(LocationRange {
+                start: Location { position: 0 },
+                end: Location { position: 3 },
+            }),
+            "for {src:?}"
+        )
+    }
+}
+
+#[test]
+fn selector_chain_alphanumeric_lexes_before_gt() {
+    let src = ["abc1> ", "abcd> "];
+
+    for src in src {
+        assert_eq!(
+            SelectorChain::try_lex(src, Location { position: 0 }),
+            Some(LocationRange {
+                start: Location { position: 0 },
+                end: Location { position: 4 },
+            }),
+        );
+    }
+}
+
+#[test]
+fn selector_chain_non_alphanumeric_before_gt_excluded() {
+    let src = ["abc)> ", "abc?> ", "abc,>>\n"];
+
+    for src in src {
+        assert_eq!(
+            SelectorChain::try_lex(src, Location { position: 0 }),
+            None,
+            "for {src:?}"
+        )
+    }
+}
 
 #[test]
 fn ast_demo() {

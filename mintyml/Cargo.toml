@@ -23,5 +23,6 @@ version = "0.2"
 default-features = false
 
 [features]
-default = ["std"]
-std = ["gramma/std", "dep:thiserror"]
+default = []
+std = ["gramma/std"]
+error-trait = ["std", "dep:thiserror"]

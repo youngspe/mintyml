@@ -7,10 +7,11 @@ install: install-node install-web-demo
     cargo binstall cargo-edit
 
 test-core:
-    cargo test -q --manifest-path mintyml/Cargo.toml
+    cargo test -qp mintyml --no-default-features
+    cargo test -qp mintyml --all-features
 
 test-cli:
-    cargo test -q --manifest-path minty-cli/Cargo.toml
+    cargo test -qp mintyml-cli
 
 @test-node: install-node (build-node-wasm "node")
     just do minty-wasm test-exec
