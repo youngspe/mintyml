@@ -94,6 +94,11 @@ article[lang=en-US] {
   or installed with
   <(a[href=https://crates.io/crates/mintyml-cli]> <`cargo install mintyml-cli`>)>
 
+  h3> IDE tooling
+
+  Try the
+  <(a[href=https://marketplace.visualstudio.com/items?itemName=youngspe.mintyml]> VS Code extension)>.
+
   h3> Libraries
 
   table {

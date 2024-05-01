@@ -14,6 +14,8 @@
 <h3>Command-line interface</h3>
 <p><a href="https://github.com/youngspe/mintyml/tree/main/minty-cli">mintyml-cli</a></p>
 <p>The command-line MinTyML converter can be downloaded from <a href="https://github.com/youngspe/mintyml/releases/latest">Github</a> or installed with <a href="https://crates.io/crates/mintyml-cli"><code>cargo install mintyml-cli</code></a></p>
+<h3>IDE tooling</h3>
+<p>Try the <a href="https://marketplace.visualstudio.com/items?itemName=youngspe.mintyml">VS Code extension</a>.</p>
 <h3>Libraries</h3>
 <table>
   <thead>
