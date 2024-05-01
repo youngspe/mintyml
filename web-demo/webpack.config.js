@@ -34,6 +34,7 @@ const config = {
         new HtmlWebpackPlugin({
             template: 'index.html',
             base: baseUrl || '/',
+            favicon: '../assets/mintyml-logo.png'
         }),
         new HtmlWebpackTagsPlugin({
             tags: ['theme.css'],

@@ -1,3 +1,4 @@
+<img src="https://raw.githubusercontent.com/youngspe/mintyml/main/assets/mintyml-logo.svg" title="MinTyML Logo">
 <h2>What is MinTyML?</h2>
 <p>MinTyML (from <dfn><ins>Min</ins>imalist H<ins>TML</ins></dfn>) is an alternative HTML syntax intended for writing documents.</p>
 <h3>Principles</h3>

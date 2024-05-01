@@ -62,7 +62,7 @@ or install with [`cargo install mintyml-cli`](https://crates.io/crates/mintyml-c
               
               [default: 2]
 
-          --complete-page[=<enable>]
+          --complete-page[=<ENABLE>]
               Make a complete HTML page by wrapping the contents in `<html>` tags.
               
               * If the source document already has an `html` element at the top level, no changes will
@@ -100,12 +100,12 @@ or install with [`cargo install mintyml-cli`](https://crates.io/crates/mintyml-c
               - code=...:                 <` code `> (default: 'code')
               - code-block-container=...: ``` code block ``` (default: 'pre')
 
-          --metadata[=<enable>]
+          --metadata[=<ENABLE>]
               If enabled, parsing metadata will be added to the output
               
               [possible values: true, false]
 
-          --metadata-elements[=<enable>]
+          --metadata-elements[=<ENABLE>]
               Generate elements for nodes that don't correspond directly to HTML elements, like comments
               and text segments. Implies `--metadata`
               

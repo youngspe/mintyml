@@ -55,6 +55,11 @@ article[lang=en-US] {
 
   Expand the <"MinTyML Input"> box to see and edit the source of this document, or use the <"Example"> dropdown in the above banner to see and edit a different example.
 
+  img[
+    src=https://raw.githubusercontent.com/youngspe/mintyml/main/assets/mintyml-logo.svg
+    title="MinTyML Logo"
+  ]>
+
   h2> What is MinTyML?
 
   MinTyML (from <(dfn> <_Min_>imalist H<_TML_>)>)
