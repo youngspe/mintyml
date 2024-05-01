@@ -33,3 +33,6 @@ runs:
         ${{ runner.os }}-node-
 
   - uses: taiki-e/install-action@just
+
+  - name: Setup wasm-pack
+    uses: jetli/wasm-pack-action@v0.4.0

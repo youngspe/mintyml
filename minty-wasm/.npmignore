@@ -4,3 +4,6 @@ target
 Cargo.toml
 tsconfig.json
 /package.template.json
+justfile
+tsconfig.build.json
+jest.config.js
