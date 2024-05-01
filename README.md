@@ -10,7 +10,14 @@
 </ol>
 <h2>Using MinTyML</h2>
 <h3>Demo</h3>
-<p><a href="https://youngspe.github.io/mintyml">Web-based demo</a></p>
+<p>This <a href="https://youngspe.github.io/mintyml">web-based demo</a> shows how a MinTyML document will look.</p>
+<h4>Examples:</h4>
+<ul>
+  <li><a href="https://youngspe.github.io/mintyml?example=table">Tables</a></li>
+  <li><a href="https://youngspe.github.io/mintyml?example=list">Lists</a></li>
+  <li><a href="https://youngspe.github.io/mintyml?example=formatting">Formatting</a></li>
+  <li><a href="https://youngspe.github.io/mintyml?example=sections">Document structure</a></li>
+</ul>
 <h3>Command-line interface</h3>
 <p><a href="https://github.com/youngspe/mintyml/tree/main/minty-cli">mintyml-cli</a></p>
 <p>The command-line MinTyML converter can be downloaded from <a href="https://github.com/youngspe/mintyml/releases/latest">Github</a> or installed with <a href="https://crates.io/crates/mintyml-cli"><code>cargo install mintyml-cli</code></a></p>

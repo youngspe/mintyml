@@ -26,7 +26,18 @@ h2> Using MinTyML
 
 h3> Demo
 
-<(a[href=https://youngspe.github.io/mintyml]> Web-based demo )>
+This
+<(a[href=https://youngspe.github.io/mintyml]> web-based demo )>
+shows how a MinTyML document will look.
+
+h4> Examples:
+
+ul {
+  >a[href="https://youngspe.github.io/mintyml?example=table"]> Tables
+  >a[href="https://youngspe.github.io/mintyml?example=list"]> Lists
+  >a[href="https://youngspe.github.io/mintyml?example=formatting"]> Formatting
+  >a[href="https://youngspe.github.io/mintyml?example=sections"]> Document structure
+}
 
 h3> Command-line interface
 
@@ -790,7 +801,7 @@ may also be used when case the text may contain <`]]>`> or <`]#]>`>.
 
     { .result {
       <[[Hello, world!]]>
-    }}
+    } }
   }
   {
     >```
@@ -811,7 +822,7 @@ may also be used when case the text may contain <`]]>`> or <`]#]>`>.
         <[[Hello,
 world!]]>
       }
-    }}
+    } }
   }
 
   {
@@ -825,7 +836,7 @@ world!]]>
 
     { .result {
     <[[Hello,\nworld!]]>
-    }}
+    } }
   }
   {
     >```
@@ -838,7 +849,7 @@ world!]]>
 
     { .result {
     <[[Hello, </world/>!]]>
-    }}
+    } }
   }
 }
 

@@ -1,0 +1,50 @@
+Unordered list:
+
+ul {
+  >Milk
+  >Eggs
+  >Bread
+}
+
+Ordered list:
+
+ol {
+  >Milk
+  >Eggs
+  >Break
+}
+
+List items can also take the form of paragraphs or blocks:
+
+ul {
+  This item uses
+  paragraph syntax.
+
+  > {
+    This item uses line-block syntax.
+  }
+
+  {
+    This item uses block syntax.
+
+    Note that the contents of this item will
+    be wrapped in <`p`> tags.
+  }
+}
+
+Lists can also be nested:
+
+ol {
+  Milk
+
+  Eggs
+
+  > {
+    Bread
+    ul {
+      > White
+      > Whole grain
+      > Sourdough
+    }
+  }
+}

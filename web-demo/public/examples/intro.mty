@@ -83,7 +83,18 @@ article[lang=en-US] {
 
   h3> Demo
 
-  <(a[href=https://youngspe.github.io/mintyml]> Web-based demo )>
+  This
+  <(a[href=https://youngspe.github.io/mintyml]> web-based demo )>
+  shows how a MinTyML document will look.
+
+  h4> Examples:
+
+  ul {
+    >a[href="https://youngspe.github.io/mintyml?example=table"]> Tables
+    >a[href="https://youngspe.github.io/mintyml?example=list"]> Lists
+    >a[href="https://youngspe.github.io/mintyml?example=formatting"]> Formatting
+    >a[href="https://youngspe.github.io/mintyml?example=sections"]> Document structure
+  }
 
   h3> Command-line interface
 
@@ -847,7 +858,7 @@ article[lang=en-US] {
 
       { .result {
         <[[Hello, world!]]>
-      }}
+      } }
     }
     {
       >```
@@ -868,7 +879,7 @@ article[lang=en-US] {
           <[[Hello,
   world!]]>
         }
-      }}
+      } }
     }
 
     {
@@ -882,7 +893,7 @@ article[lang=en-US] {
 
       { .result {
       <[[Hello,\nworld!]]>
-      }}
+      } }
     }
     {
       >```
@@ -895,7 +906,7 @@ article[lang=en-US] {
 
       { .result {
       <[[Hello, </world/>!]]>
-      }}
+      } }
     }
   }
 

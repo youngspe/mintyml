@@ -351,6 +351,8 @@ const exampleName = params.get('example') ?? 'intro'
 new Demo(document.querySelector('demo-container')!, exampleName, [
     'intro',
     'table',
-    'blockquote',
+    'list',
+    'sections',
     'formatting',
+    'blockquote',
 ]).init()
