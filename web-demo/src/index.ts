@@ -350,6 +350,7 @@ const exampleName = params.get('example') ?? 'intro'
 
 new Demo(document.querySelector('demo-container')!, exampleName, [
     'intro',
+    'sample-page',
     'table',
     'list',
     'sections',

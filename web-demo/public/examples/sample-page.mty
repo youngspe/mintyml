@@ -1,0 +1,61 @@
+h1> MinTyML Example Page
+
+h2> Introduction
+
+This is an example page written in MinTyML to demonstrate its simplicity and power.
+
+h2> Features
+ol {
+  > Concise Syntax
+  > Easy to Learn
+  > Flexible
+}
+
+h2> Code block
+
+```
+function foo() {
+  return 1 + 1
+}
+```
+
+h2> Text Block
+
+'''
+This text will be treated like plaintext and not parsed as MinTyML:
+> Hello
+
+Escape sequences are not handled, so this will render as two backslashes: \\
+'''
+
+"""
+This text behaves the same as above but escape sequences are still processed: \u{1F600}
+"""
+
+pre>code>'''
+This is an alternative way to create a code block.
+'''
+
+h2> Inline Formatting
+
+MinTyML supports <#strong#>, </emphasis/>, <_underline_>, <~strikethrough~>,
+<"quote">, and <`code`> formatting.
+
+h2> Inferred Element Types
+section {
+  This is a paragraph within a section.
+
+  Another paragraph.
+}
+
+h2> Headings and Subheadings
+
+h3> Why Use MinTyML?
+
+MinTyML simplifies the process of writing and maintaining web documents.
+
+h2> Comments
+
+MinTyML allows you to add comments to your code that won't be displayed in the
+final document.
+<! This is a comment that will not be rendered !>
