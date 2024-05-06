@@ -67,7 +67,7 @@
 }
 
 view-output>* {
-    min-width: 36rch;
+    min-width: 36ch;
 }
 
 :root {
@@ -308,7 +308,7 @@ blockquote {
     margin-inline: auto;
     padding-inline: 1em;
     position: relative;
-    max-inline-size: calc(max(50rch, 80%));
+    max-inline-size: calc(max(50ch, 80%));
 }
 
 blockquote:not(:has(>p))::before,
@@ -592,8 +592,8 @@ blockquote>p {
 
 :is(article, article section, details)>:is(p, h1, h2, h3, h4, h5, h6, ul, ol, dl, pre),
 :is(article, article section, details)>details>summary {
-    margin-inline: calc(max(var(--margin-inline), 50% - 42rch));
-    max-width: calc(84rch - 2 * var(--margin-inline));
+    margin-inline: calc(max(var(--margin-inline), 50% - 42ch));
+    max-width: calc(84ch - 2 * var(--margin-inline));
 }
 
 fieldset {
@@ -634,7 +634,7 @@ table {
     max-width: max-content;
     min-width: -moz-fit-content;
     min-width: fit-content;
-    width: calc(max(25%, min(30rch, 99% - 2 * var(--margin-inline))));
+    width: calc(max(25%, min(30ch, 99% - 2 * var(--margin-inline))));
 }
 
 table>caption {
