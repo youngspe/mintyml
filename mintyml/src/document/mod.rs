@@ -399,6 +399,9 @@ impl SyntaxError {
                             join_display(expected.iter().map(|t| t.name()), " | ")
                         )
                     }
+                    SyntaxErrorKind::Unclosed { .. } => {
+                        write!(f, "Unclosed delimiter {sample}")
+                    }
                 }?;
 
                 write!(f, " at character {}", self.range.start.position)
@@ -432,6 +435,9 @@ pub enum SyntaxErrorKind {
     ParseFailed {
         expected: Vec<gramma::error::ExpectedParse>,
     },
+    /// An opening delimiter does not have an accompanying closing delimiter.
+    #[non_exhaustive]
+    Unclosed { delimiter: UnclosedDelimiterKind },
 }
 
 impl From<EscapeError> for SyntaxError {
@@ -454,6 +460,21 @@ impl From<ParseError<'_>> for SyntaxError {
             },
         }
     }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnclosedDelimiterKind {
+    /// "{"
+    #[non_exhaustive]
+    Block {},
+    /// "<("
+    #[non_exhaustive]
+    Inline {},
+    #[non_exhaustive]
+    SpecialInline { kind: SpecialKind },
+    #[non_exhaustive]
+    Comment {},
 }
 
 /// An object that holds relevant state and resources for building a document.
@@ -521,12 +542,35 @@ impl<'src> Document<'src> {
     }
 
     /// Converts an abstract syntax tree to a document.
-    pub fn from_ast(src: &'src str, ast: &ast::Document) -> Result<Self, Vec<SyntaxError>> {
+    pub fn from_ast_forgiving(
+        src: &'src str,
+        ast: &ast::Document,
+    ) -> (Option<Self>, Vec<SyntaxError>) {
         let mut cx = BuildContext {
             src,
             errors: default(),
         };
-        Self::build_from_ast(&mut cx, &ast).map_err(|_| cx.errors)
+        let out = Self::build_from_ast(&mut cx, &ast);
+        (out.ok(), cx.errors)
+    }
+
+    /// Converts an abstract syntax tree to a document.
+    pub fn from_ast(src: &'src str, ast: &ast::Document) -> Result<Self, Vec<SyntaxError>> {
+        let (out, errors) = Self::from_ast_forgiving(src, ast);
+
+        if errors.is_empty() {
+            out.ok_or_else(default)
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Parses a document from a MinTyML source string.
+    pub fn parse_forgiving(src: &'src str) -> (Option<Self>, Vec<SyntaxError>) {
+        match parse_tree::<ast::Document, 4>(src) {
+            Ok(ref ast) => Self::from_ast_forgiving(src, ast),
+            Err(e) => (None, vec![e.into()]),
+        }
     }
 
     /// Parses a document from a MinTyML source string.
@@ -793,13 +837,41 @@ fn build_inline_special<'src>(
             }]
         }
     };
-    let (open, close) = match special {
-        Emphasis { open, close, .. } => (open.range, close.range),
-        Strong { open, close, .. } => (open.range, close.range),
-        Underline { open, close, .. } => (open.range, close.range),
-        Strike { open, close, .. } => (open.range, close.range),
-        Quote { open, close, .. } => (open.range, close.range),
-        Code { code } => (code.range, code.range),
+    let open = match special {
+        Emphasis { open, .. } => open.range,
+        Strong { open, .. } => open.range,
+        Underline { open, .. } => open.range,
+        Strike { open, .. } => open.range,
+        Quote { open, .. } => open.range,
+        Code { code } => code.range,
+    };
+
+    let close = match special {
+        Emphasis {
+            close: Some(close), ..
+        } => close.range,
+        Strong {
+            close: Some(close), ..
+        } => close.range,
+        Underline {
+            close: Some(close), ..
+        } => close.range,
+        Strike {
+            close: Some(close), ..
+        } => close.range,
+        Quote {
+            close: Some(close), ..
+        } => close.range,
+        Code { code } => code.range,
+        _ => {
+            cx.errors.push(SyntaxError {
+                range: open,
+                kind: SyntaxErrorKind::Unclosed {
+                    delimiter: UnclosedDelimiterKind::SpecialInline { kind },
+                },
+            });
+            open
+        }
     };
 
     let range = open.combine(close);
@@ -856,60 +928,65 @@ fn build_text_line_part<'src>(
             }
             .into(),
         }),
-        Inline {
-            inline: ast::Inline {
-                inner: Some(node), ..
+        Inline { inline } => build_inline_node(cx, inline),
+        InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
+    }
+}
+
+fn build_inline_node<'src>(
+    cx: &mut BuildContext<'src>,
+    ast::Inline { open, close, inner }: &ast::Inline,
+) -> BuildResult<Node<'src>> {
+    let close = close.as_ref().map(|c| c.range).unwrap_or_else(|| {
+        cx.errors.push(SyntaxError {
+            range: open.range,
+            kind: SyntaxErrorKind::Unclosed {
+                delimiter: UnclosedDelimiterKind::Inline {},
             },
-        } => Ok(Node {
-            range: LocationRange {
-                start: node.start,
-                end: node.end,
-            },
-            node_type: match &node.node_type {
-                ast::NodeType::NonParagraph { node } => {
-                    build_non_paragraph_node(cx, &node.node_type)?
-                }
-                ast::NodeType::MultilineCode { multiline } => build_multiline_code(cx, multiline)?,
-                ast::NodeType::Element {
-                    element: ast::Element::WithSelector { selector, body },
-                } => Element {
-                    selector: Selector::build_from_ast(cx, selector)?,
-                    kind: ElementKind::Inline(Some(get_delimiter(body))),
-                    ..build_element_body(cx, body)?
-                }
-                .into(),
-                ast::NodeType::Element {
-                    element: ast::Element::Body { body },
-                } => Element {
-                    kind: ElementKind::Inline(Some(get_delimiter(body))),
-                    ..build_element_body(cx, body)?
-                }
-                .into(),
-                ast::NodeType::Paragraph { paragraph } => Element {
-                    kind: ElementKind::Inline(None),
-                    ..build_paragraph(cx, paragraph)?
-                }
-                .into(),
-            },
-        }),
-        Inline {
-            inline:
-                ast::Inline {
-                    inner: None,
-                    open,
-                    close,
-                    ..
-                },
-        } => Ok(Node {
-            range: open.range.combine(close.range),
-            node_type: Element {
+        });
+        open.range
+    });
+    Ok(Node {
+        range: open.range.combine(close),
+        node_type: match inner {
+            Some(node) => build_inline_node_type(cx, node)?,
+            None => Element {
                 kind: ElementKind::Inline(None),
                 ..default()
             }
             .into(),
-        }),
-        InlineSpecial { inline_special } => build_inline_special(inline_special, cx),
-    }
+        },
+    })
+}
+
+fn build_inline_node_type<'src>(
+    cx: &mut BuildContext<'src>,
+    node: &ast::Node,
+) -> BuildResult<NodeType<'src>> {
+    Ok(match &node.node_type {
+        ast::NodeType::NonParagraph { node } => build_non_paragraph_node(cx, &node.node_type)?,
+        ast::NodeType::MultilineCode { multiline } => build_multiline_code(cx, multiline)?,
+        ast::NodeType::Element {
+            element: ast::Element::WithSelector { selector, body },
+        } => Element {
+            selector: Selector::build_from_ast(cx, selector)?,
+            kind: ElementKind::Inline(Some(get_delimiter(body))),
+            ..build_element_body(cx, body)?
+        }
+        .into(),
+        ast::NodeType::Element {
+            element: ast::Element::Body { body },
+        } => Element {
+            kind: ElementKind::Inline(Some(get_delimiter(body))),
+            ..build_element_body(cx, body)?
+        }
+        .into(),
+        ast::NodeType::Paragraph { paragraph } => Element {
+            kind: ElementKind::Inline(None),
+            ..build_paragraph(cx, paragraph)?
+        }
+        .into(),
+    })
 }
 
 fn build_paragraph<'src>(
@@ -965,24 +1042,47 @@ fn build_child_nodes<'src>(
     }
 }
 
+fn block_content_range<'src>(
+    cx: &mut BuildContext<'src>,
+    block: &ast::Block,
+) -> BuildResult<Option<LocationRange>> {
+    let start = block.l_brace.range.end;
+    let end = block
+        .r_brace
+        .as_ref()
+        .map(|b| b.range.start)
+        .unwrap_or_else(|| {
+            cx.errors.push(SyntaxError {
+                range: block.l_brace.range,
+                kind: SyntaxErrorKind::Unclosed {
+                    delimiter: UnclosedDelimiterKind::Block {},
+                },
+            });
+            start
+        });
+    Ok(Some(LocationRange { start, end }))
+}
+
+fn body_content_range<'src>(
+    cx: &mut BuildContext<'src>,
+    body: &ast::ElementBody,
+) -> BuildResult<Option<LocationRange>> {
+    match body {
+        ast::ElementBody::Block { block, .. } | ast::ElementBody::LineBlock { block, .. } => {
+            block_content_range(cx, block)
+        }
+        _ => Ok(None),
+    }
+}
+
 fn build_element_body<'src>(
     cx: &mut BuildContext<'src>,
     body: &ast::ElementBody,
 ) -> BuildResult<Element<'src>> {
-    let content_range = match body {
-        ast::ElementBody::Block { block, .. } | ast::ElementBody::LineBlock { block, .. } => {
-            Some(LocationRange {
-                start: block.l_brace.range.end,
-                end: block.r_brace.range.start,
-            })
-        }
-        _ => None,
-    };
-
     Ok(Element {
+        content_range: body_content_range(cx, body)?,
         nodes: build_child_nodes(cx, body)?,
         kind: get_default_kind(body),
-        content_range,
         ..default()
     })
 }
@@ -1015,10 +1115,20 @@ fn build_non_paragraph_node<'src>(
 ) -> BuildResult<NodeType<'src>> {
     match node_type {
         ast::NonParagraphNodeType::Verbatim { verbatim } => build_verbatim_text(verbatim, cx),
-        ast::NonParagraphNodeType::Comment { comment } => Ok(NodeType::Comment(Comment {
-            value: cx.slice(comment.inner),
-            range: comment.inner,
-        })),
+        ast::NonParagraphNodeType::Comment { comment } => {
+            if comment.close.is_none() {
+                cx.errors.push(SyntaxError {
+                    range: comment.open.range,
+                    kind: SyntaxErrorKind::Unclosed {
+                        delimiter: UnclosedDelimiterKind::Comment {},
+                    },
+                })
+            }
+            Ok(NodeType::Comment(Comment {
+                value: cx.slice(comment.inner),
+                range: comment.inner,
+            }))
+        }
         ast::NonParagraphNodeType::Interpolation { interpolation } => Ok(NodeType::Text(Text {
             escape: false,
             raw: true,

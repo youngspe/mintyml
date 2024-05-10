@@ -19,55 +19,69 @@ pub(crate) mod output;
 pub(crate) mod transform;
 pub(crate) mod utils;
 
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use core::{borrow::Borrow, fmt};
 
-use document::{Document, Src, ToStatic};
+use document::Document;
 use output::OutputError;
 
 pub use config::{MetadataConfig, OutputConfig, SpecialTagConfig};
+
+#[deprecated]
+#[doc(hidden)]
 pub use document::{SyntaxError, SyntaxErrorKind};
+pub use error::ConvertError;
 
-/// Represents an error that occurred while converting MinTyML.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
-pub enum ConvertError<'src> {
-    /// The conversion failed due to one or more syntax errors.
-    #[cfg_attr(feature = "error-trait", error("{}", utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
-    Syntax {
-        syntax_errors: Vec<SyntaxError>,
-        src: Src<'src>,
-    },
-    /// The conversion failed for some other reason.
-    #[cfg_attr(feature = "error-trait", error("Unknown"))]
-    Unknown,
-}
+pub mod error {
+    use core::fmt;
 
-impl<'src> ConvertError<'src> {
-    /// Copies all borrowed data so the error can outlive the source str.
-    pub fn to_static(self) -> ConvertError<'static> {
-        match self {
-            ConvertError::Syntax { syntax_errors, src } => ConvertError::Syntax {
-                syntax_errors,
-                src: src.to_static(),
-            },
-            Self::Unknown => ConvertError::Unknown,
+    pub use crate::document::{SyntaxError, SyntaxErrorKind, UnclosedDelimiterKind};
+    use crate::{
+        document::{Src, ToStatic},
+        output::OutputError,
+    };
+
+    /// Represents an error that occurred while converting MinTyML.
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
+    pub enum ConvertError<'src> {
+        /// The conversion failed due to one or more syntax errors.
+        #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
+        Syntax {
+            syntax_errors: alloc::vec::Vec<SyntaxError>,
+            src: Src<'src>,
+        },
+        /// The conversion failed for some other reason.
+        #[cfg_attr(feature = "error-trait", error("Unknown"))]
+        Unknown,
+    }
+
+    impl<'src> ConvertError<'src> {
+        /// Copies all borrowed data so the error can outlive the source str.
+        pub fn to_static(self) -> ConvertError<'static> {
+            match self {
+                ConvertError::Syntax { syntax_errors, src } => ConvertError::Syntax {
+                    syntax_errors,
+                    src: src.to_static(),
+                },
+                Self::Unknown => ConvertError::Unknown,
+            }
         }
     }
-}
 
-impl<'src> ToStatic for ConvertError<'src> {
-    type Static = ConvertError<'static>;
-    fn to_static(self) -> ConvertError<'static> {
-        self.to_static()
+    impl<'src> ToStatic for ConvertError<'src> {
+        type Static = ConvertError<'static>;
+        fn to_static(self) -> ConvertError<'static> {
+            self.to_static()
+        }
     }
-}
 
-impl From<OutputError> for ConvertError<'_> {
-    fn from(value: OutputError) -> Self {
-        match value {
-            output::OutputError::WriteError(fmt::Error) => Self::Unknown,
+    impl From<OutputError> for ConvertError<'_> {
+        fn from(value: OutputError) -> Self {
+            match value {
+                OutputError::WriteError(fmt::Error) => Self::Unknown,
+            }
         }
     }
 }
@@ -107,8 +121,21 @@ pub fn convert<'src>(
     config: impl Borrow<OutputConfig<'src>>,
 ) -> Result<String, ConvertError<'src>> {
     let mut out = String::new();
-    convert_to(src, config, &mut out)?;
+    convert_to_internal(src, config.borrow(), &mut out, false)?;
     Ok(out)
+}
+
+// TODO: doc
+pub fn convert_forgiving<'src>(
+    src: &'src str,
+    config: impl Borrow<OutputConfig<'src>>,
+) -> Result<String, (Option<String>, ConvertError<'src>)> {
+    let mut out = String::new();
+    match convert_to_internal(src, config.borrow(), &mut out, true) {
+        Ok(()) => Ok(out),
+        Err(err) if out.is_empty() => Err((None, err)),
+        Err(err) => Err((Some(out), err)),
+    }
 }
 
 /// Converts the given MinTyML string `src` using `config` for configuration options.
@@ -147,11 +174,27 @@ pub fn convert_to<'src>(
     config: impl Borrow<OutputConfig<'src>>,
     out: &mut impl fmt::Write,
 ) -> Result<(), ConvertError<'src>> {
-    let config: &OutputConfig = config.borrow();
-    let mut document = Document::parse(src).map_err(|e| ConvertError::Syntax {
-        syntax_errors: e,
-        src: src.into(),
-    })?;
+    convert_to_internal(src, config.borrow(), out, true)
+}
+
+fn convert_to_internal<'src>(
+    src: &'src str,
+    config: &OutputConfig<'src>,
+    out: &mut impl fmt::Write,
+    forgive: bool,
+) -> Result<(), ConvertError<'src>> {
+    let config: &OutputConfig = config;
+    let (document, syntax_errors) = Document::parse_forgiving(src);
+
+    let mut document = match (document, syntax_errors.is_empty(), forgive) {
+        (Some(d), true, _) | (Some(d), _, true) => d,
+        _ => {
+            return Err(ConvertError::Syntax {
+                syntax_errors,
+                src: src.into(),
+            })
+        }
+    };
 
     if config.complete_page.unwrap_or(false) {
         transform::complete_page::complete_page(&mut document, &config);
@@ -167,6 +210,13 @@ pub fn convert_to<'src>(
     output::output_html_to(&document, out, config).map_err(|e| match e {
         OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
     })?;
+
+    if !syntax_errors.is_empty() {
+        return Err(ConvertError::Syntax {
+            syntax_errors,
+            src: src.into(),
+        });
+    }
 
     Ok(())
 }

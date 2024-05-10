@@ -254,7 +254,7 @@ gramma::define_rule!(
         #[transform(map<discard_before<Whitespace>>)]
         pub nodes: Option<Nodes>,
         #[transform(ignore_before<Whitespace>)]
-        pub r_brace: RightBrace,
+        pub r_brace: Option<RightBrace>,
     }
 
     pub struct TextLine {
@@ -299,7 +299,7 @@ gramma::define_rule!(
         pub open: OpenComment,
         #[transform(parse_as<Vec<CommentPart>>)]
         pub inner: LocationRange,
-        pub close: CloseComment,
+        pub close: Option<CloseComment>,
     }
 
     pub enum CommentPart {
@@ -311,7 +311,7 @@ gramma::define_rule!(
         pub open: OpenInline,
         #[transform(ignore_around<Whitespace>)]
         pub inner: Option<Box<Node>>,
-        pub close: CloseInline,
+        pub close: Option<CloseInline>,
     }
 
     #[non_exhaustive]
@@ -319,27 +319,27 @@ gramma::define_rule!(
         Emphasis {
             open: OpenEmphasis,
             inner: Nodes,
-            close: CloseEmphasis,
+            close: Option<CloseEmphasis>,
         },
         Strong {
             open: OpenStrong,
             inner: Nodes,
-            close: CloseStrong,
+            close: Option<CloseStrong>,
         },
         Underline {
             open: OpenUnderline,
             inner: Nodes,
-            close: CloseUnderline,
+            close: Option<CloseUnderline>,
         },
         Strike {
             open: OpenStrike,
             inner: Nodes,
-            close: CloseStrike,
+            close: Option<CloseStrike>,
         },
         Quote {
             open: OpenQuote,
             inner: Nodes,
-            close: CloseQuote,
+            close: Option<CloseQuote>,
         },
         Code {
             code: InlineCode,
