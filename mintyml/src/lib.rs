@@ -125,7 +125,33 @@ pub fn convert<'src>(
     Ok(out)
 }
 
-// TODO: doc
+/// Similar to [`convert`], but may return a best-effort conversion of an ill-formed document
+/// in the event of an error.
+///
+/// # Example
+///
+/// ```
+///
+/// # use mintyml::OutputConfig;
+/// let (out, _err) = mintyml::convert_forgiving(r#"
+/// table {
+///   {
+///     > Cell A
+///     > Cell B
+///   {
+///     > Cell C
+///     > Cell D
+///   }
+/// }
+/// "#, OutputConfig::new()).unwrap_err();
+///
+/// assert_eq!(out.unwrap(), concat!(
+///     r#"<table>"#,
+///     r#"<tr><td>Cell A</td> <td>Cell B</td>"#,
+///     r#" <td><p>Cell C</p> <p>Cell D</p></td></tr>"#,
+///     r#"</table>"#,
+/// ));
+/// ```
 pub fn convert_forgiving<'src>(
     src: &'src str,
     config: impl Borrow<OutputConfig<'src>>,
