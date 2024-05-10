@@ -202,6 +202,34 @@ where
         .map_err(Into::into)
     }
 
+    /// Conform to the requirements of both HTML and XML comments.
+    fn write_comment_body(&mut self, src: &str) -> OutputResult {
+        // HTML comments must not start with ">" or "->"
+        if src.starts_with(">") || src.starts_with("->") {
+            self.out.write_char(' ')?;
+        }
+
+        let mut slice = src;
+
+        // XML comments must not contain "--", and HTML comments must not contain
+        // "<!--", "-->", or "--!>".
+        while let Some(i) = slice.find("--") {
+            let chunk;
+            (chunk, slice) = slice.split_at(i + 1);
+            self.out.write_str(chunk)?;
+            self.out.write_char(' ')?;
+        }
+
+        self.out.write_str(slice)?;
+
+        // XML comments must not end with "-", and HTML comments must not end
+        // with "<!-"
+        if slice.ends_with("-") {
+            self.out.write_char(' ')?;
+        }
+        Ok(())
+    }
+
     fn write_unescape(&mut self, src: &str) -> OutputResult {
         write_unescaped(src, &mut *self.out).map_err(Into::into)
     }
@@ -399,7 +427,7 @@ where
             }
             NodeType::Comment(comment) => {
                 self.out.write_str("<!--")?;
-                self.write_escape(&comment.value, false)?;
+                self.write_comment_body(&comment.value)?;
                 self.out.write_str("-->")?;
                 self.follows_space = false;
             }

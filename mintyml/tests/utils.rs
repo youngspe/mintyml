@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::fmt::{self, Write};
 
 use mintyml::{ConvertError, OutputConfig};
