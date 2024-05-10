@@ -212,8 +212,8 @@ fn convert_to_internal<'src>(
     let config: &OutputConfig = config;
     let (document, syntax_errors) = Document::parse_forgiving(src);
 
-    let mut document = match (document, syntax_errors.is_empty(), forgive) {
-        (Some(d), true, _) | (Some(d), _, true) => d,
+    let mut document = match (document, syntax_errors.is_empty(), config.fail_fast) {
+        (Some(d), true, _) | (Some(d), _, None | Some(false)) => d,
         _ => {
             return Err(ConvertError::Syntax {
                 syntax_errors,
@@ -233,9 +233,11 @@ fn convert_to_internal<'src>(
         transform::metadata::add_metadata(&mut document, metadata);
     }
 
-    output::output_html_to(&document, out, config).map_err(|e| match e {
-        OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
-    })?;
+    if syntax_errors.is_empty() || forgive {
+        output::output_html_to(&document, out, config).map_err(|e| match e {
+            OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
+        })?;
+    }
 
     if !syntax_errors.is_empty() {
         return Err(ConvertError::Syntax {

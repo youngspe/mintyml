@@ -69,6 +69,8 @@ pub struct OutputConfig<'src> {
     pub lang: Option<Src<'src>>,
     /// If provided, parsing metadata will be added to the output.
     pub metadata: Option<MetadataConfig>,
+    /// Whether the parser should opt to fail earlier if errors are present. Defaults to `false`.
+    pub fail_fast: Option<bool>,
 }
 
 impl<'src> OutputConfig<'src> {
@@ -205,5 +207,10 @@ impl<'src> OutputConfig<'src> {
             metadata: config.into(),
             ..self
         }
+    }
+
+    /// Whether the parser should opt to fail earlier if errors are present. Defaults to `false`.
+    pub fn fail_fast(self, enable: bool) -> Self {
+        self.update(|c| c.fail_fast = Some(enable))
     }
 }

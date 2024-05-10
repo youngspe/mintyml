@@ -241,12 +241,13 @@ class Demo {
             }
             this._markers = []
 
-            if ('output' in e.data) {
+            if (e.data.output != null) {
                 session.clearAnnotations()
                 this._textOutput.setValue(e.data.output, 0)
                 this._textOutput.clearSelection()
                 this._updateDoc(e.data.output)
-            } else {
+            }
+            if (e.data.error != null) {
                 const annotations: ace.Ace.Annotation[] = []
                 if (e.data.error.syntaxErrors) {
                     let doc = session.getDocument()

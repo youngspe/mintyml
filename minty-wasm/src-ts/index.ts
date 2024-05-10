@@ -53,7 +53,7 @@ export interface MintymlConverterOptions {
      * If true, produce XHTML5 rather than HTML.
      * @default false
      */
-    xml: boolean
+    xml: boolean | null
     /**
      * If specified, the converted HTML will be pretty-printed with the given number
      * of spaces in each indentation level.
@@ -70,7 +70,7 @@ export interface MintymlConverterOptions {
      *
      * @default false
      */
-    completePage: boolean
+    completePage: boolean | null
 
     specialTags: Partial<{
         emphasis: string | null
@@ -90,30 +90,75 @@ export interface MintymlConverterOptions {
          */
         elements: boolean
     }> | null
+
+    fail_fast: boolean | null
 }
+
+export namespace ConversionResult {
+    interface Base {
+        success: boolean
+        output: string | null
+        error?: MintymlError
+    }
+    export interface Ok extends Base {
+        success: true
+        output: string
+        error?: never
+    }
+    export interface Err extends Base {
+        success: false
+        output: string | null
+        error: MintymlError
+    }
+}
+
+export type MintymlConversionResult =
+    | ConversionResult.Ok
+    | ConversionResult.Err
 
 /** Converts MinTyML source to HTML. */
 export class MintymlConverter implements MintymlConverterOptions {
-    xml; indent; completePage; specialTags; metadata
+    xml; indent; completePage; specialTags; metadata; fail_fast
 
     constructor(options: Partial<MintymlConverterOptions> = {}) {
-        this.xml = options.xml ?? false
+        this.xml = options.xml ?? null
         this.indent = options.indent ?? null
-        this.completePage = options.completePage ?? false
+        this.completePage = options.completePage ?? null
         this.specialTags = options.specialTags ?? null
         this.metadata = options.metadata ?? null
+        this.fail_fast = options.fail_fast ?? null
     }
 
     /** Converts the given MinTyML string to HTML. */
     async convert(src: string): Promise<string> {
-        const mintyml = await _mintyml
-        try {
-            return mintyml.convert(src, this.xml, this.indent ?? -1, this.completePage, this.specialTags, this.metadata)
-        } catch (e) {
-            const err = e as MintymlError
+        const result = await this.convertForgiving(src)
+        if (result.success) {
+            return result.output
+        } else {
+            throw result.error
+        }
+    }
 
-            if (err.syntaxErrors) {
-                err.message = err.syntaxErrors.map(e => {
+    /**
+     * Converts the given MinTyML string to HTML, attempting a best-effort conversion
+     * when there are errors.
+     */
+    async convertForgiving(src: string): Promise<MintymlConversionResult> {
+        const mintyml = await _mintyml
+        const result = mintyml.convert(
+            src,
+            this.xml ?? undefined,
+            this.indent ?? -1,
+            this.completePage ?? undefined,
+            this.specialTags,
+            this.metadata,
+            this.fail_fast ?? undefined,
+        )
+        if (result.error) {
+            const outError = result.error as MintymlError
+
+            if (outError.syntaxErrors) {
+                outError.message = outError.syntaxErrors.map(e => {
                     if ('expected' in e) {
                         return `Unexpected '${e.actual}'; expected ${e.expected.join(' | ')}`
                     } else {
@@ -121,7 +166,7 @@ export class MintymlConverter implements MintymlConverterOptions {
                     }
                 }).join('\n')
             }
-            throw e
         }
+        return result
     }
 }

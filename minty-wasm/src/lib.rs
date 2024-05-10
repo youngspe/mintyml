@@ -37,6 +37,10 @@ fn to_js_error(e: ConvertError) -> JsValue {
                             let _ =
                                 Reflect::set(&obj, &message_key, &"Invalid escape sequence".into());
                         }
+                        mintyml::SyntaxErrorKind::Unclosed { .. } => {
+                            let _ =
+                                Reflect::set(&obj, &message_key, &"Unclosed delimiter".into());
+                        }
                         mintyml::SyntaxErrorKind::ParseFailed { expected, .. } => {
                             let _ = Reflect::set(&obj, &message_key, &"Parsing failed".into());
                             let _ = Reflect::set(
@@ -62,17 +66,7 @@ fn to_js_error(e: ConvertError) -> JsValue {
     }
 }
 
-#[wasm_bindgen]
-pub fn convert(
-    src: &str,
-    xml: bool,
-    indent: i32,
-    complete_page: bool,
-    special_tags: JsValue,
-    metadata: JsValue,
-) -> Result<String, JsValue> {
-    let mut config = OutputConfig::new().xml(xml).complete_page(complete_page);
-
+fn get_special_tags(config: &mut OutputConfig, special_tags: JsValue) -> Result<(), JsValue> {
     if special_tags.is_object() {
         let field = |key: &str| {
             Reflect::get(&special_tags, &key.into()).map(|j| j.as_string().map(Into::into))
@@ -86,11 +80,32 @@ pub fn convert(
         config.special_tags.code = field("code")?;
         config.special_tags.code_block_container = field("codeBlockContainer")?;
     }
+    Ok(())
+}
+
+pub fn convert_inner(
+    src: &str,
+    xml: Option<bool>,
+    indent: i32,
+    complete_page: Option<bool>,
+    special_tags: JsValue,
+    metadata: JsValue,
+    fail_fast: Option<bool>,
+) -> Result<String, (Option<String>, JsValue)> {
+    let mut config = OutputConfig::new();
+
+    config.xml = xml;
+    config.complete_page = complete_page;
+    config.fail_fast = fail_fast;
+
+    get_special_tags(&mut config, special_tags).map_err(|e| (None, e))?;
 
     if metadata.is_truthy() {
         let mut metadata_config = MetadataConfig::new();
         if metadata.is_object() {
-            metadata_config.elements = Reflect::get(&metadata, &"elements".into())?.is_truthy();
+            metadata_config.elements = Reflect::get(&metadata, &"elements".into())
+                .map_err(|e| (None, e))?
+                .is_truthy();
         }
         config.metadata = metadata_config.into();
     }
@@ -103,5 +118,35 @@ pub fn convert(
                 .into(),
         )
     }
-    mintyml::convert(src, config).map_err(to_js_error)
+    mintyml::convert_forgiving(src, config).map_err(|(out, e)| (out, to_js_error(e)))
+}
+
+#[wasm_bindgen]
+pub fn convert(
+    src: &str,
+    xml: Option<bool>,
+    indent: i32,
+    complete_page: Option<bool>,
+    special_tags: JsValue,
+    metadata: JsValue,
+    fail_fast: Option<bool>,
+) -> Result<JsValue, JsValue> {
+    let (success, out, err) = match convert_inner(
+        src,
+        xml,
+        indent,
+        complete_page,
+        special_tags,
+        metadata,
+        fail_fast,
+    ) {
+        Ok(out) => (true, Some(out), None),
+        Err((out, e)) => (false, out, Some(e)),
+    };
+
+    let mut obj = js_sys::Object::new();
+    Reflect::set(&mut obj, &"success".into(), &success.into())?;
+    Reflect::set(&mut obj, &"output".into(), &out.into())?;
+    Reflect::set(&mut obj, &"error".into(), &err.into())?;
+    Ok(obj.into())
 }
