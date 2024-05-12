@@ -129,7 +129,7 @@ pub fn add_metadata(target: &mut Document, options: &MetadataConfig) {
                     range: comment.range,
                     node_type: NodeType::Text(Text {
                         value: comment.value,
-                        range: comment.range,
+                        slice: comment.range,
                         ..default()
                     }),
                 });

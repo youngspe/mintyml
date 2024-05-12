@@ -7,6 +7,7 @@
 extern crate alloc;
 extern crate either;
 extern crate gramma;
+extern crate derive_more;
 
 #[cfg(feature = "error-trait")]
 extern crate thiserror;
@@ -14,12 +15,13 @@ extern crate thiserror;
 pub(crate) mod ast;
 pub(crate) mod config;
 pub(crate) mod document;
+pub mod error;
 pub(crate) mod escape;
 pub(crate) mod output;
 pub(crate) mod transform;
 pub(crate) mod utils;
 
-use alloc::string::String;
+use alloc::{borrow::Cow, string::String};
 use core::{borrow::Borrow, fmt};
 
 use document::Document;
@@ -32,59 +34,7 @@ pub use config::{MetadataConfig, OutputConfig, SpecialTagConfig};
 pub use document::{SyntaxError, SyntaxErrorKind};
 pub use error::ConvertError;
 
-pub mod error {
-    use core::fmt;
-
-    pub use crate::document::{SyntaxError, SyntaxErrorKind, UnclosedDelimiterKind};
-    use crate::{
-        document::{Src, ToStatic},
-        output::OutputError,
-    };
-
-    /// Represents an error that occurred while converting MinTyML.
-    #[non_exhaustive]
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    #[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
-    pub enum ConvertError<'src> {
-        /// The conversion failed due to one or more syntax errors.
-        #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
-        Syntax {
-            syntax_errors: alloc::vec::Vec<SyntaxError>,
-            src: Src<'src>,
-        },
-        /// The conversion failed for some other reason.
-        #[cfg_attr(feature = "error-trait", error("Unknown"))]
-        Unknown,
-    }
-
-    impl<'src> ConvertError<'src> {
-        /// Copies all borrowed data so the error can outlive the source str.
-        pub fn to_static(self) -> ConvertError<'static> {
-            match self {
-                ConvertError::Syntax { syntax_errors, src } => ConvertError::Syntax {
-                    syntax_errors,
-                    src: src.to_static(),
-                },
-                Self::Unknown => ConvertError::Unknown,
-            }
-        }
-    }
-
-    impl<'src> ToStatic for ConvertError<'src> {
-        type Static = ConvertError<'static>;
-        fn to_static(self) -> ConvertError<'static> {
-            self.to_static()
-        }
-    }
-
-    impl From<OutputError> for ConvertError<'_> {
-        fn from(value: OutputError) -> Self {
-            match value {
-                OutputError::WriteError(fmt::Error) => Self::Unknown,
-            }
-        }
-    }
-}
+type Src<'src> = Cow<'src, str>;
 
 /// Converts the given MinTyML string `src` using `config` for configuration options.
 /// If successful, returns a string containing the converted HTML document.

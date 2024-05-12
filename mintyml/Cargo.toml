@@ -7,6 +7,11 @@ repository.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[dependencies.derive_more]
+version = "0.99.17"
+default-features = false
+features = ["display"]
+
 [dependencies.thiserror]
 version = "1.0.57"
 default-features = false
@@ -25,4 +30,4 @@ default-features = false
 [features]
 default = []
 std = ["gramma/std"]
-error-trait = ["std", "dep:thiserror"]
+error-trait = ["std", "dep:thiserror", "derive_more/error"]
