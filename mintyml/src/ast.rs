@@ -49,9 +49,7 @@ gramma::define_rule!(
 
     #[transform(ignore_around<Whitespace>)]
     pub struct Document {
-        pub start: Location,
-        pub nodes: Option<Content>,
-        pub end: Location,
+        pub content: Content,
     }
 );
 

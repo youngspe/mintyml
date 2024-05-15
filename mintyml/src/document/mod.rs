@@ -134,33 +134,6 @@ impl<'cfg> BuildContext<'cfg> {
         todo!()
     }
 
-    // fn build_lines(
-    //     &mut self,
-    //     &ast::Content { start, lines, end }: &ast::Content,
-    // ) -> BuildResult<Content> {
-
-    //     #[derive(Default)]
-    //     enum State<'cfg> {
-    //         #[default]
-    //         Initial,
-    //         Inline,
-    //         Selector {
-    //             selectors: Vec<Selector<'cfg>>,
-    //         },
-    //         ChildCombinator {
-    //             selectors: Vec<Selector<'cfg>>,
-    //         },
-    //     }
-
-    //     let out_lines = Vec::new();
-
-    //     for line in lines {
-    //         match line {
-    //             ast::Line::EmptyLine { _newline } => {}
-    //             ast::Line::NonEmptyLine { nodes, .. } => {}
-    //         }
-    //     }
-
     /// Called when a child combinator has just been read
     fn post_child_combinator(
         &mut self,
@@ -308,7 +281,7 @@ impl<'cfg> BuildContext<'cfg> {
         }
         while let Some((
             &(
-                _,
+                ref space,
                 ast::Node {
                     start,
                     ref node_type,
@@ -318,6 +291,9 @@ impl<'cfg> BuildContext<'cfg> {
             ref rest,
         )) = nodes.split_first()
         {
+            if let Some(space) = space {
+                out_nodes.push(self.exact_space(space.range)?);
+            }
             let node_range = LocationRange { start, end };
             *nodes = rest;
             match node_type {
@@ -341,7 +317,7 @@ impl<'cfg> BuildContext<'cfg> {
                 }
                 ast::NodeType::Element { element } => {
                     out_nodes.push(self.build_element(node_range, element)?.into());
-                },
+                }
             }
         }
 
@@ -361,5 +337,37 @@ impl<'cfg> BuildContext<'cfg> {
         self.extend_line(nodes, &mut out_nodes)?;
         self.validate_line(&mut out_nodes)?;
         Ok(out_nodes)
+    }
+}
+
+#[non_exhaustive]
+pub struct Document<'cfg> {
+    pub range: LocationRange,
+    pub content: Content<'cfg>,
+}
+
+impl<'cfg> Document<'cfg> {
+    /// Converts an abstract syntax tree to a document.
+    pub(crate) fn from_ast(
+        src: &str,
+        ast: &ast::Document,
+        fail_fast: bool,
+    ) -> (Option<Self>, Vec<SyntaxError>) {
+        let mut cx = BuildContext {
+            src,
+            errors: default(),
+            fail_fast,
+        };
+        let content = cx.build_content(&ast.content);
+        let out = content.map(|content| Self {
+            range: LocationRange {
+                start: Location { position: 0 },
+                end: Location {
+                    position: src.len(),
+                },
+            },
+            content,
+        });
+        (out.ok(), cx.errors)
     }
 }

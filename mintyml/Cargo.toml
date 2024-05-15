@@ -10,7 +10,7 @@ authors.workspace = true
 [dependencies.derive_more]
 version = "0.99.17"
 default-features = false
-features = ["display"]
+features = ["display", "add"]
 
 [dependencies.thiserror]
 version = "1.0.57"

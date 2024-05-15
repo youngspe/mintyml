@@ -1,11 +1,14 @@
+use core::mem;
+
 use derive_more::Display;
 use gramma::parse::LocationRange;
 
-use crate::{ast, error::UnclosedDelimiterKind, utils::default};
+use crate::{ast, error::UnclosedDelimiterKind, inference::engine::ChildInference, utils::default};
 
 use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector};
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub enum ElementDelimiter {
     #[non_exhaustive]
     Line { combinator: LocationRange },
@@ -19,6 +22,7 @@ pub enum ElementDelimiter {
 }
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub enum ElementType {
     #[non_exhaustive]
     Paragraph {},
@@ -33,6 +37,35 @@ pub struct Element<'cfg> {
     pub range: LocationRange,
     pub selectors: Vec<Selector<'cfg>>,
     pub content: Content<'cfg>,
+    pub element_type: ElementType,
+    pub(crate) inference_method: ChildInference<'cfg>,
+}
+
+impl<'cfg> Element<'cfg> {
+    /// If `selectors` contains an uninferred tag at index >= 1, split the element
+    /// into two nested elements so that the uninferred tag is at index 0 of the child element.
+    pub fn split_uninferred(&mut self) {
+        if let Some(uninferred_selector_index) = self
+            .selectors
+            .iter()
+            .skip(1)
+            .position(|s| s.uninferred())
+            .map(|i| i + 1)
+        {
+            let new_selectors = self.selectors.split_off(uninferred_selector_index);
+            let new_element = Element {
+                range: self.range,
+                selectors: new_selectors,
+                content: Content {
+                    range: self.content.range,
+                    nodes: mem::take(&mut self.content.nodes),
+                },
+                element_type: self.element_type.clone(),
+                inference_method: ChildInference::default(),
+            };
+            self.content.nodes = vec![new_element.into()];
+        }
+    }
 }
 
 /// The type of a special element.

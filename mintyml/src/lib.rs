@@ -5,9 +5,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
+extern crate derive_more;
 extern crate either;
 extern crate gramma;
-extern crate derive_more;
 
 #[cfg(feature = "error-trait")]
 extern crate thiserror;
@@ -17,6 +17,7 @@ pub(crate) mod config;
 pub(crate) mod document;
 pub mod error;
 pub(crate) mod escape;
+pub(crate) mod inference;
 pub(crate) mod output;
 pub(crate) mod transform;
 pub(crate) mod utils;

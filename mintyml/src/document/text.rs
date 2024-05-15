@@ -14,6 +14,52 @@ pub enum TextSlice<'cfg> {
     Provided { value: Cow<'cfg, str> },
 }
 
+impl<'cfg> TextSlice<'cfg> {
+    pub fn as_str<'src>(&'src self, src: &'src str) -> &'src str {
+        match self {
+            TextSlice::FromSource { range } => range.slice(src),
+            TextSlice::Provided { value } => &*value,
+        }
+    }
+}
+
+impl<'cfg> From<Cow<'cfg, str>> for TextSlice<'cfg> {
+    fn from(value: Cow<'cfg, str>) -> Self {
+        Self::Provided { value }
+    }
+}
+
+impl<'cfg> From<&'cfg str> for TextSlice<'cfg> {
+    fn from(value: &'cfg str) -> Self {
+        Self::Provided {
+            value: value.into(),
+        }
+    }
+}
+
+impl<'cfg> From<String> for TextSlice<'_> {
+    fn from(value: String) -> Self {
+        Self::Provided {
+            value: value.into(),
+        }
+    }
+}
+
+impl From<LocationRange> for TextSlice<'_> {
+    fn from(range: LocationRange) -> Self {
+        Self::FromSource { range }
+    }
+}
+
+impl<'cfg> TextSlice<'cfg> {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            TextSlice::FromSource { range } => range.end <= range.start,
+            TextSlice::Provided { value } => value.is_empty(),
+        }
+    }
+}
+
 impl<'cfg> Default for TextSlice<'cfg> {
     fn default() -> Self {
         Self::Provided { value: default() }

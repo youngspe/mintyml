@@ -12,8 +12,17 @@ use super::{BuildContext, BuildResult, TextSlice};
 #[non_exhaustive]
 pub struct Selector<'cfg> {
     pub range: LocationRange,
-    pub element: Tag<'cfg>,
+    pub tag: Tag<'cfg>,
     pub items: Vec<SelectorItem<'cfg>>,
+}
+
+impl<'cfg> Selector<'cfg> {
+    pub fn uninferred(&self) -> bool {
+        match self.tag {
+            Tag::Explicit { .. } => false,
+            Tag::Implicit { .. } | Tag::Wildcard { .. } => true,
+        }
+    }
 }
 
 impl<'cfg> Selector<'cfg> {
@@ -26,6 +35,13 @@ impl<'cfg> Selector<'cfg> {
             ..default()
         }
     }
+
+    pub(crate) fn with_tag(self, tag: impl Into<TextSlice<'cfg>>) -> Self {
+        Self {
+            tag: TextSlice::into(tag.into()),
+            ..self
+        }
+    }
 }
 
 #[non_exhaustive]
@@ -36,6 +52,12 @@ pub enum Tag<'cfg> {
     Implicit {},
     #[non_exhaustive]
     Wildcard { range: LocationRange },
+}
+
+impl<'cfg> From<TextSlice<'cfg>> for Tag<'cfg> {
+    fn from(value: TextSlice<'cfg>) -> Self {
+        Self::Explicit { value }
+    }
 }
 
 impl<'cfg> Default for Tag<'cfg> {
@@ -198,7 +220,7 @@ impl<'cfg> BuildContext<'cfg> {
 
         Ok(Selector {
             range,
-            element,
+            tag: element,
             items,
         })
     }

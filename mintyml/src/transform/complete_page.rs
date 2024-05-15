@@ -24,7 +24,7 @@ where
             Element {
                 selector:
                     Selector {
-                        element: SelectorElement::Name(tag),
+                        tag: SelectorElement::Name(tag),
                         ..
                     },
                 ..
@@ -48,11 +48,7 @@ where
 
 /// Transforms `doc` so that its nodes are wrapped in `<html>` tags with a `<head>` and `<body>`
 pub fn complete_page<'src>(doc: &mut Document<'src>, config: &OutputConfig<'src>) {
-    if  doc
-        .nodes
-        .iter_mut()
-        .any(|n| has_tag_in(n, ["html"]))
-    {
+    if doc.nodes.iter_mut().any(|n| has_tag_in(n, ["html"])) {
         // There's already an <html> tag so no need to restructure.
         return;
     }

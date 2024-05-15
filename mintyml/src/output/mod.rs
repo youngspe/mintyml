@@ -8,7 +8,7 @@ use core::{
 use alloc::string::String;
 
 use crate::{
-    document::{ContentMode, Document, Element, Node, NodeType, Selector, SelectorElement, Space},
+    document::{Document, Element, Node, NodeType, Selector, Space},
     escape::{unescape_parts, UnescapePart},
     utils::{default, to_lowercase},
     OutputConfig,
