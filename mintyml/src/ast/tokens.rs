@@ -41,10 +41,9 @@ gramma::define_token!(
     pub struct Equals;
 
     #[pattern(matcher = {
-        whitespace().repeat(..).lazy()
+        (whitespace() & !char('\n')).repeat(..).simple()
         + char('\n')
-        + char(..).repeat(..).lazy()
-        + (line_end() | precedes(!whitespace()))
+        + (whitespace() & !char('\n')).repeat(..).simple()
     })]
     pub struct NewLine;
 
@@ -58,4 +57,7 @@ gramma::define_token!(
         | char('\'') + (!char("\\'") | escape()).repeat(..).simple() + char('\'')
     })]
     pub struct QuotedString;
+
+    #[pattern(matcher = char(..).repeat(1..).simple())]
+    pub struct AnyChars;
 );

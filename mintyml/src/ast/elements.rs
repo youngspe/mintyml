@@ -96,7 +96,10 @@ gramma::define_rule!(
     #[non_exhaustive]
     pub enum Element {
         #[non_exhaustive]
-        Line { combinator: LocationRange },
+        Line {
+            #[transform(parse_as<RightAngle>)]
+            combinator: LocationRange,
+        },
         #[non_exhaustive]
         Block { value: Block },
         #[non_exhaustive]

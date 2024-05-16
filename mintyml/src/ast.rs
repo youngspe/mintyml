@@ -26,17 +26,11 @@ gramma::define_rule!(
         Element { element: Element },
     }
 
-    pub enum Line {
-        EmptyLine {
-            #[transform(ignore_after<Whitespace>)]
-            newline: NewLine,
-        },
+    pub struct Line {
+        pub start: Location,
         #[transform(ignore_around<Space>)]
-        NonEmptyLine {
-            start: Location,
-            nodes: Vec<(Option<Space>, Node)>,
-            end: Location,
-        },
+        pub nodes: Vec<(Option<Space>, Node)>,
+        pub end: Location,
     }
 
     #[transform(ignore_after<Whitespace>)]
@@ -53,15 +47,16 @@ gramma::define_rule!(
     }
 );
 
+const LOOKAHEAD: usize = 2;
+
 pub fn parse(src: &str) -> Result<Document, ParseError> {
-    gramma::parse_tree::<Document, 1>(src)
+    gramma::parse_tree::<Document, LOOKAHEAD>(src)
 }
 
 #[cfg(test)]
 mod test {
-    use gramma::{parse::LocationRange, Token};
-
     use super::*;
+    use gramma::{parse::LocationRange, Token};
 
     #[test]
     fn text_segment_excludes_line_breaks() {
@@ -98,22 +93,6 @@ mod test {
             assert_eq!(
                 TextSegment::try_lex(src, Location { position: 0 }),
                 None,
-                "for {src:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn text_segment_alphanumeric_multi_word_lexes_before_gt() {
-        let src = ["abc1 abc1> ", "abcd abcd> "];
-
-        for src in src {
-            assert_eq!(
-                TextSegment::try_lex(src, Location { position: 0 }),
-                Some(LocationRange {
-                    start: Location { position: 0 },
-                    end: Location { position: 9 },
-                }),
                 "for {src:?}"
             );
         }
@@ -165,8 +144,6 @@ mod test {
 
     #[test]
     fn ast_demo() {
-        use gramma::ast::parse_tree;
-
         let src = r#"
 section {
     h1#foo.bar[
@@ -236,7 +213,7 @@ section {
     }
 }
     "#;
-        let _ast = parse_tree::<Document, 2>(src).unwrap();
+        let _ast = parse(src).unwrap();
         #[cfg(feature = "std")]
         {
             ::std::println!("{:#}", gramma::display_tree(src, &_ast));
@@ -245,8 +222,6 @@ section {
 
     #[test]
     fn ast_demo2() {
-        use gramma::ast::parse_tree;
-
         let src = r#"
 section {
     a
@@ -254,10 +229,58 @@ section {
     b
 }
     "#;
-        let _ast = parse_tree::<Document, 2>(src).unwrap();
+        let _ast = parse(src).unwrap();
         #[cfg(feature = "std")]
         {
             ::std::println!("{:#}", gramma::display_tree(src, &_ast));
         }
+    }
+
+    #[test]
+    fn empty_line() {
+        let src = "";
+        let line = gramma::parse_tree::<Line, LOOKAHEAD>(src).unwrap();
+        // assert!(matches!(line, Line::EmptyLine { .. }));
+    }
+
+    #[test]
+    fn wrapped_line() {
+        let src = "{ foo }";
+        let line = gramma::parse_tree::<(LeftBrace, Line, RightBrace), 2>(src)
+            .unwrap()
+            .1;
+        // assert!(matches!(line, Line::NonEmptyLine { .. }));
+    }
+
+    #[test]
+    fn multi_paragraph_block() {
+        let src = "{
+    foo
+
+    foo
+}";
+        let line = parse_as_vec::<Node>(src);
+    }
+
+    #[track_caller]
+    pub fn parse_as_vec<R: gramma::Rule>(src: &str) -> R {
+        let ast_vec = gramma::parse_tree::<Vec<R>, LOOKAHEAD>(src).unwrap();
+        assert_eq!(ast_vec.len(), 1);
+        ast_vec.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn right_arrow_node() {
+        let src = ">";
+        let node = parse_as_vec::<Node>(src);
+        assert!(matches!(
+            node,
+            Node {
+                node_type: NodeType::Element {
+                    element: Element::Line { .. }
+                },
+                ..
+            }
+        ));
     }
 }

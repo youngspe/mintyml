@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use gramma::parse::{Location, LocationRange};
 
 use crate::{
-    ast::{self, AttributeAssignment},
+    ast::{self, AttributeAssignment, SelectorSegment},
     error::{ItemType, UnclosedDelimiterKind},
     utils::default,
 };
@@ -214,7 +214,7 @@ impl<'cfg> BuildContext<'cfg> {
     fn extend_class_like(
         &mut self,
         items: &mut Vec<SelectorItem<'cfg>>,
-        ast: &Vec<ast::ClassLike>,
+        ast: &[ast::ClassLike],
     ) -> BuildResult {
         for cl in ast {
             items.extend(self.build_class_like(cl)?);
@@ -241,24 +241,29 @@ impl<'cfg> BuildContext<'cfg> {
         let est_item_count = first.len()
             + segments
                 .iter()
-                .map(|s| 1 + s.class_like.len())
+                .map(|s| match s {
+                    SelectorSegment::Attributes { .. } => 1,
+                    SelectorSegment::ClassLike { items: value } => value.len(),
+                })
                 .sum::<usize>();
-        let mut items = Vec::with_capacity(est_item_count);
-        self.extend_class_like(&mut items, first)?;
+        let mut selector_items = Vec::with_capacity(est_item_count);
+        self.extend_class_like(&mut selector_items, first)?;
 
-        for &ast::SelectorSegment {
-            ref attributes,
-            ref class_like,
-        } in segments
-        {
-            items.push(self.build_attribute_list(attributes)?);
-            self.extend_class_like(&mut items, class_like)?;
+        for segment in segments {
+            match segment {
+                SelectorSegment::Attributes { attributes } => {
+                    selector_items.push(self.build_attribute_list(attributes)?);
+                }
+                SelectorSegment::ClassLike { items } => {
+                    self.extend_class_like(&mut selector_items, items)?
+                }
+            };
         }
 
         Ok(Selector {
             range,
             tag: element,
-            items,
+            items: selector_items,
         })
     }
 }

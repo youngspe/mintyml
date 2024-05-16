@@ -178,73 +178,71 @@ impl<'cfg> BuildContext<'cfg> {
             end,
         }: &ast::Content,
     ) -> BuildResult<Content<'cfg>> {
-        let mut out_nodes = Vec::new();
+        let mut out_nodes = Vec::<Node<'cfg>>::new();
         let mut node_buf = Vec::new();
         let range = LocationRange { start, end };
         let mut consecutive_line = false;
         let mut last_line_end = start;
 
-        for line in lines {
-            match line {
-                ast::Line::EmptyLine { newline } => {
-                    out_nodes.push(Node {
-                        range: newline.range,
-                        node_type: NodeType::TextLike {
-                            value: TextLike::Space {
-                                value: Space::ParagraphEnd {},
-                            },
+        for &ast::Line {
+            start,
+            ref nodes,
+            end,
+        } in lines
+        {
+            if nodes.is_empty() {
+                out_nodes.push(Node {
+                    range: LocationRange { start, end },
+                    node_type: NodeType::TextLike {
+                        value: TextLike::Space {
+                            value: Space::ParagraphEnd {},
                         },
-                    });
-                    consecutive_line = false;
-                }
-                &ast::Line::NonEmptyLine {
-                    start,
-                    ref nodes,
-                    end,
-                } => {
-                    node_buf = self.build_line(&mut &nodes[..], node_buf)?;
+                    },
+                });
+                consecutive_line = false;
+            } else {
+                node_buf = self.build_line(&mut &nodes[..], node_buf)?;
 
-                    // Determine if this line should be added to the last element:
-                    if consecutive_line {
-                        let first_visible = node_buf.iter().find(|n| n.is_visible());
+                // Determine if this line should be added to the last element:
+                if consecutive_line {
+                    let first_visible = node_buf.iter().find(|n| n.is_visible());
 
-                        let starts_with_element = first_visible
-                            .and_then(Node::as_element)
-                            .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
-                            .unwrap_or(false);
+                    let starts_with_element = first_visible
+                        .and_then(Node::as_element)
+                        .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
+                        .unwrap_or(false);
 
-                        if !starts_with_element {
-                            if let Some(last_element) = out_nodes
-                                .iter_mut()
-                                .rfind(|n| n.is_visible())
-                                .and_then(Node::as_element_mut)
-                                .filter(|e| {
-                                    matches!(
-                                        e.element_type,
-                                        ElementType::Standard {
-                                            delimiter: ElementDelimiter::Line { .. },
-                                        }
-                                    )
-                                })
-                            {
-                                let line_end_range = LocationRange {
-                                    start: last_line_end,
-                                    end: start,
-                                };
-                                last_element.content.nodes.push(Node {
-                                    range: line_end_range,
-                                    node_type: NodeType::TextLike {
-                                        value: Space::LineEnd {}.into(),
-                                    },
-                                });
-                                last_element.content.nodes.extend(mem::take(&mut node_buf));
-                            }
+                    if !starts_with_element {
+                        if let Some(last_element) = out_nodes
+                            .iter_mut()
+                            .rfind(|n| n.is_visible())
+                            .and_then(Node::as_element_mut)
+                            .filter(|e| {
+                                matches!(
+                                    e.element_type,
+                                    ElementType::Standard {
+                                        delimiter: ElementDelimiter::Line { .. },
+                                    }
+                                )
+                            })
+                        {
+                            let line_end_range = LocationRange {
+                                start: last_line_end,
+                                end: start,
+                            };
+                            last_element.content.nodes.push(Node {
+                                range: line_end_range,
+                                node_type: NodeType::TextLike {
+                                    value: Space::LineEnd {}.into(),
+                                },
+                            });
+                            last_element.content.nodes.extend(mem::take(&mut node_buf));
                         }
                     }
-                    consecutive_line = true;
-                    last_line_end = end;
-                    out_nodes.extend(mem::take(&mut node_buf))
                 }
+                consecutive_line = true;
+                last_line_end = end;
+                out_nodes.extend(mem::take(&mut node_buf))
             }
         }
 

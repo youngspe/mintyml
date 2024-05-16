@@ -72,6 +72,7 @@ pub struct Text<'cfg> {
     pub multiline: bool,
     pub unescape_in: bool,
     pub escape_out: bool,
+    pub raw: bool,
 }
 
 #[non_exhaustive]
@@ -120,6 +121,7 @@ impl<'cfg> BuildContext<'cfg> {
         range: LocationRange,
         unescape_in: bool,
         escape_out: bool,
+        raw: bool,
         multiline: bool,
     ) -> BuildResult<Node<'cfg>> {
         Ok(Node {
@@ -130,6 +132,7 @@ impl<'cfg> BuildContext<'cfg> {
                         slice: self.escapable_slice(range, unescape_in)?,
                         unescape_in,
                         escape_out,
+                        raw,
                         multiline,
                     },
                 },
@@ -170,6 +173,7 @@ impl<'cfg> BuildContext<'cfg> {
                         unescape_in: false,
                         escape_out: raw.is_none(),
                         multiline: false,
+                        raw: false,
                     },
                 },
             },
@@ -179,7 +183,7 @@ impl<'cfg> BuildContext<'cfg> {
     pub fn build_inline_text(&mut self, text: &ast::InlineText) -> BuildResult<Node<'cfg>> {
         Ok(match text {
             ast::InlineText::Segment { value } => {
-                self.build_text_node(value.range, true, true, false)?
+                self.build_text_node(value.range, true, true, false, false)?
             }
             ast::InlineText::Verbatim { value } => self.build_verbatim_node(value)?,
             ast::InlineText::Comment { comment } => {
@@ -187,7 +191,7 @@ impl<'cfg> BuildContext<'cfg> {
                 todo!()
             }
             ast::InlineText::Interpolation { interpolation } => {
-                self.build_text_node(interpolation.range, false, false, false)?
+                self.build_text_node(interpolation.range, false, false, true, false)?
             }
         })
     }

@@ -44,6 +44,7 @@ gramma::define_token!(
         selector_chain() + precedes(
             char(" \t").repeat(..).simple() + char(">{")
             | char('[')
+            | src_end()
         )
     })]
     pub struct SelectorChain;
@@ -67,22 +68,33 @@ gramma::define_rule!(
         pub end: Location,
     }
 
-    #[transform(parse_as<Option<SelectorChain>>)]
+    #[transform(parse_as<SelectorChain>)]
     pub struct SelectorStart {
         pub element: Option<ElementSelector>,
         pub class_like: Vec<ClassLike>,
     }
 
-    pub struct SelectorSegment {
-        pub attributes: AttributeSelector,
-        #[transform(parse_as<Option<SelectorChain>>)]
-        pub class_like: Vec<ClassLike>,
+    pub enum SelectorSegment {
+        Attributes {
+            attributes: AttributeSelector,
+        },
+        ClassLike {
+            #[transform(parse_as<SelectorChain>)]
+            items: Vec<ClassLike>,
+        },
     }
 
     pub enum ClassLike {
-        Class { value: ClassSelector },
-        Id { value: IdSelector },
-        Invalid { range: LocationRange },
+        Class {
+            value: ClassSelector,
+        },
+        Id {
+            value: IdSelector,
+        },
+        Invalid {
+            #[transform(parse_as<AnyChars>)]
+            range: LocationRange,
+        },
     }
 
     pub enum ElementSelector {
@@ -128,3 +140,40 @@ gramma::define_rule!(
         pub ident: ClassName,
     }
 );
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn selector_example() {
+        gramma::parse_tree::<Selector, 1>("a.b#c[x].b").unwrap();
+    }
+
+    #[test]
+    fn selector_empty_repeated() {
+        gramma::parse_tree::<Vec<Selector>, 1>("").unwrap();
+    }
+
+    #[test]
+    fn selector_example_repeated() {
+        super::super::test::parse_as_vec::<Selector>("a.b#c[x].b");
+    }
+
+    /// Test that in invalid selector parses correctly so we can report it as an error later.
+    #[test]
+    fn invalid_selector() {
+        let src = "a.b#c[x]d.e";
+        let selector = gramma::parse_tree::<Selector, 1>(src).unwrap();
+
+        let SelectorSegment::ClassLike { ref items } = selector.segments[1] else {
+            panic!();
+        };
+
+        let ClassLike::Invalid { range } = items[0] else {
+            panic!();
+        };
+
+        assert_eq!(range.slice(src), "d.e");
+    }
+}

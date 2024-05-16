@@ -176,7 +176,8 @@ impl<'cfg> BuildContext<'cfg> {
                         // shave off the first and last 2 chars ("<`", "`>")
                         range.start += 2;
                         range.end -= 2;
-                        self.build_text_node(range, false, true, false)?.into()
+                        self.build_text_node(range, false, true, false, false)?
+                            .into()
                     },
                     ..Element::new(range, SpecialKind::Code)
                 });

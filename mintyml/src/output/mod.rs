@@ -435,7 +435,7 @@ where
             NodeType::TextLike { value } => match value {
                 TextLike::Text { value: text } if text.slice.is_empty() => {}
                 TextLike::Text { value: text } => {
-                    let is_raw = !self.is_xml() && (text.escape_out || self.is_raw());
+                    let is_raw = text.raw || !self.is_xml() && (!text.escape_out || self.is_raw());
                     let slice = self.slice(&text.slice);
 
                     let mut write = |value| match (text.unescape_in, is_raw) {
