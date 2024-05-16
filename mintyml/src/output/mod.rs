@@ -8,7 +8,9 @@ use core::{
 use alloc::string::String;
 
 use crate::{
-    document::{Comment, Document, Element, Node, NodeType, Selector, Space, TextLike, TextSlice},
+    document::{
+        Comment, Content, Document, Element, Node, NodeType, Selector, Space, TextLike, TextSlice,
+    },
     escape::{unescape_parts, UnescapePart},
     utils::{default, to_lowercase},
     OutputConfig,
@@ -381,13 +383,7 @@ where
         let mut opening_tags = get_valid_tags(element).peekable();
 
         if opening_tags.peek().is_none() {
-            return self.in_content(element, |this| {
-                element
-                    .content
-                    .nodes
-                    .iter()
-                    .try_for_each(|node| this.process_node(node))
-            });
+            return self.in_content(element, |this| this.process_content(&element.content));
         }
 
         let self_close_last = element.content.nodes.is_empty() && self.is_xml();
@@ -407,11 +403,7 @@ where
             if !element.content.nodes.is_empty() {
                 this.indent(if last_tag_info.is_root { 0 } else { 1 }, |this| {
                     this.line()?;
-                    element
-                        .content
-                        .nodes
-                        .iter()
-                        .try_for_each(|node| this.process_node(node))
+                    this.process_content(&element.content)
                 })?;
                 this.line()?;
             }
@@ -429,7 +421,12 @@ where
         })
     }
 
-    fn process_node(&mut self, node: &'cx Node<'cfg>) -> OutputResult {
+    fn process_node(
+        &mut self,
+        node: &'cx Node<'cfg>,
+        is_first: bool,
+        is_last: bool,
+    ) -> OutputResult {
         let out = match &node.node_type {
             NodeType::Element { value } => self.process_element(value)?,
             NodeType::TextLike { value } => match value {
@@ -466,6 +463,7 @@ where
                     self.out.write_str("-->")?;
                     self.follows_space = false;
                 }
+                TextLike::Space { .. } if is_first || is_last => {}
                 TextLike::Space { value: space } => {
                     self.space(space)?;
                     self.follows_space = true
@@ -474,6 +472,14 @@ where
         };
 
         Ok(out)
+    }
+
+    fn process_content(&mut self, content: &'cx Content<'cfg>) -> OutputResult {
+        content.nodes.iter().enumerate().try_for_each(|(i, node)| {
+            let is_first = i == 0;
+            let is_last = i == content.nodes.len() - 1;
+            self.process_node(node, is_first, is_last)
+        })
     }
 }
 
@@ -511,12 +517,7 @@ pub fn output_html_to<'cx, 'cfg>(
                 cx.out.write_str("<!DOCTYPE html>\n")?;
             }
 
-            document
-                .content
-                .nodes
-                .iter()
-                .try_for_each(|node| cx.process_node(node))?;
-
+            cx.process_content(&document.content)?;
             cx.line()?;
 
             Ok(())

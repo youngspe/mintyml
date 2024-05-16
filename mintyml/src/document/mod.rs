@@ -191,58 +191,79 @@ impl<'cfg> BuildContext<'cfg> {
         } in lines
         {
             if nodes.is_empty() {
-                out_nodes.push(Node {
-                    range: LocationRange { start, end },
-                    node_type: NodeType::TextLike {
-                        value: TextLike::Space {
-                            value: Space::ParagraphEnd {},
+                if consecutive_line {
+                    out_nodes.push(Node {
+                        range: LocationRange { start, end },
+                        node_type: NodeType::TextLike {
+                            value: TextLike::Space {
+                                value: Space::ParagraphEnd {},
+                            },
                         },
-                    },
-                });
+                    });
+                }
                 consecutive_line = false;
             } else {
                 node_buf = self.build_line(&mut &nodes[..], node_buf)?;
+                let mut appended = false;
+
+                let first_visible = node_buf.iter().find(|n| n.is_visible());
+                let starts_with_element = first_visible
+                    .and_then(Node::as_element)
+                    .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
+                    .unwrap_or(false);
 
                 // Determine if this line should be added to the last element:
-                if consecutive_line {
-                    let first_visible = node_buf.iter().find(|n| n.is_visible());
-
-                    let starts_with_element = first_visible
-                        .and_then(Node::as_element)
-                        .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
-                        .unwrap_or(false);
-
-                    if !starts_with_element {
-                        if let Some(last_element) = out_nodes
-                            .iter_mut()
-                            .rfind(|n| n.is_visible())
-                            .and_then(Node::as_element_mut)
-                            .filter(|e| {
-                                matches!(
-                                    e.element_type,
-                                    ElementType::Standard {
-                                        delimiter: ElementDelimiter::Line { .. },
-                                    }
-                                )
-                            })
-                        {
-                            let line_end_range = LocationRange {
-                                start: last_line_end,
-                                end: start,
-                            };
-                            last_element.content.nodes.push(Node {
-                                range: line_end_range,
-                                node_type: NodeType::TextLike {
-                                    value: Space::LineEnd {}.into(),
-                                },
-                            });
-                            last_element.content.nodes.extend(mem::take(&mut node_buf));
-                        }
+                if consecutive_line && !starts_with_element {
+                    if let Some((last_node_range, last_element)) = out_nodes
+                        .iter_mut()
+                        .rfind(|n| n.is_visible())
+                        .and_then(|n| match n.node_type {
+                            NodeType::Element { ref mut value } => Some((&mut n.range, value)),
+                            _ => None,
+                        })
+                        .filter(|(_, e)| {
+                            matches!(
+                                e.element_type,
+                                ElementType::Standard {
+                                    delimiter: ElementDelimiter::Line { .. },
+                                } | ElementType::Paragraph { .. }
+                            )
+                        })
+                    {
+                        appended = true;
+                        let line_end_range = LocationRange {
+                            start: last_line_end,
+                            end: start,
+                        };
+                        last_element.content.nodes.push(Node {
+                            range: line_end_range,
+                            node_type: NodeType::TextLike {
+                                value: Space::LineEnd {}.into(),
+                            },
+                        });
+                        last_element.content.nodes.extend(node_buf.drain(..));
+                        last_element.range.end = end;
+                        last_node_range.end = end;
                     }
                 }
                 consecutive_line = true;
                 last_line_end = end;
-                out_nodes.extend(mem::take(&mut node_buf))
+                if !appended {
+                    if starts_with_element {
+                        out_nodes.extend(node_buf.drain(..))
+                    } else {
+                        out_nodes.push(
+                            Element {
+                                content: Content {
+                                    range,
+                                    nodes: node_buf.drain(..).collect(),
+                                },
+                                ..Element::new(range, ElementType::Paragraph {})
+                            }
+                            .into(),
+                        )
+                    }
+                }
             }
         }
 
