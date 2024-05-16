@@ -3,17 +3,17 @@ pub mod when;
 
 use core::{cell::Cell, fmt, mem};
 
-use alloc::{borrow::Cow, rc::Rc};
+use alloc::{borrow::Cow, rc::Rc, string::String, vec::Vec};
 
 use derive_more::Add;
-use either::IntoEither;
+use either::{Either, IntoEither};
 
 use crate::{
-    document::{Content, Element, Node, NodeType, Selector, Tag, TextSlice},
+    document::{Content, Element, Node, NodeType, Selector, TextSlice},
     utils::default,
 };
 
-pub use rules::{rule, rules, DefineRules, RuleSet};
+pub use rules::{rule, rules, DefineRules};
 pub use when::{when, InferWhen};
 
 use self::rules::InferenceRule;
@@ -25,11 +25,11 @@ pub trait Infer<'cfg>: fmt::Debug {
 }
 
 trait DynInfer<'cfg>: fmt::Debug {
-    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>, method: &InferenceMethod<'cfg>);
+    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_, '_>, method: &InferenceMethod<'cfg>);
 }
 
 impl<'cfg, I: Infer<'cfg>> DynInfer<'cfg> for I {
-    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>, method: &InferenceMethod<'cfg>) {
+    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_, '_>, method: &InferenceMethod<'cfg>) {
         let mut rules = self.define_rules().into_rules();
         inferrer.use_rule(&mut rules, method);
     }
@@ -94,7 +94,7 @@ pub struct InferenceMethod<'cfg> {
 }
 
 impl<'cfg> InferenceMethod<'cfg> {
-    fn get_inner(&self) -> Option<&dyn DynInfer> {
+    fn get_inner(&self) -> Option<&dyn DynInfer<'cfg>> {
         match self.inner {
             InferenceMethodInner::Inherit => None,
             InferenceMethodInner::Rc(ref inner) => Some(&**inner),
@@ -272,7 +272,10 @@ impl<'cfg, 'infer> InferenceTarget<'cfg, 'infer> {
         self
     }
 
-    pub fn inference_method<M>(&mut self, method: impl IntoInferenceMethod<'cfg, M>) -> &mut Self {
+    pub fn inference_method<M>(
+        &mut self,
+        method: impl IntoInferenceMethod<'cfg, M> + 'cfg,
+    ) -> &mut Self {
         *self.child_inference = ChildInference::WithMethod(method.into_inference_method());
         self
     }
@@ -288,24 +291,27 @@ struct InferenceState<'cfg> {
     child_inference: Option<ChildInference<'cfg>>,
 }
 
-struct Inferrer<'cfg, 'infer> {
+struct Inferrer<'cfg, 'infer, 'base> {
     src: &'cfg str,
     nodes: &'infer mut [Node<'cfg>],
     parent_context: Option<&'infer InferencePredicateContext<'cfg, 'infer>>,
     states: &'infer mut Vec<InferenceState<'cfg>>,
-    base_rule: Option<&'infer mut (dyn InferenceRule<'cfg> + 'infer)>,
-    base_inference_method: &'infer InferenceMethod<'cfg>,
+    base_rule: &'base mut (dyn InferenceRule<'cfg>),
+    base_inference_method: &'base InferenceMethod<'cfg>,
 }
 
-fn fallback_rule<'cfg, 'infer>(
-    rule: &'infer mut (impl InferenceRule<'cfg> + 'infer),
-    base: &'infer mut Option<&'infer mut (dyn InferenceRule<'cfg> + 'infer)>,
-) -> impl InferenceRule<'cfg> + 'infer {
-    rules().add(rule).add(base.as_mut())
+fn fallback_rule<'cfg>(
+    rule: impl InferenceRule<'cfg>,
+    base: impl InferenceRule<'cfg>,
+) -> impl InferenceRule<'cfg> {
+    rules().add(rule).add(base)
 }
 
-impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
-    fn test_node(&mut self, rule: &mut impl InferenceRule<'cfg>, index: usize) -> bool {
+impl<'cfg, 'infer, 'base> Inferrer<'cfg, 'infer, 'base> {
+    fn test_node<'this>(&mut self, rule: &mut impl InferenceRule<'cfg>, index: usize) -> bool
+    where
+        'this: 'base,
+    {
         let InferenceState {
             result: Err(max_depth),
             ref mut child_inference,
@@ -320,7 +326,7 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
             return true;
         }
 
-        let result = fallback_rule(rule, &mut self.base_rule).test_rule(
+        let result = fallback_rule(rule, &mut *self.base_rule).test_rule(
             0,
             max_depth,
             &InferencePredicateContext {
@@ -394,7 +400,11 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
                 child_inference: &mut child_inference,
             };
 
-            fallback_rule(rule, &mut self.base_rule).apply_rule(0, depth, &mut inference_target);
+            fallback_rule(&mut *rule, &mut *self.base_rule).apply_rule(
+                0,
+                depth,
+                &mut inference_target,
+            );
 
             element.inference_method = child_inference;
         }
@@ -426,29 +436,17 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
         parent_method: &InferenceMethod<'cfg>,
         index: usize,
     ) {
+        let child_inference;
         let mut nodes = {
-            let NodeType::Element {
-                value: ref mut element,
-                ..
-            } = self.nodes[index].node_type
-            else {
+            let Some(element) = self.nodes[index].as_element_mut() else {
                 return;
             };
-
+            child_inference = mem::take(&mut element.inference_method);
             element.split_uninferred();
             mem::take(&mut element.content.nodes)
         };
 
         {
-            let NodeType::Element {
-                value: ref element, ..
-            } = self.nodes[index].node_type
-            else {
-                return;
-            };
-
-            let child_inference = mem::take(&mut element.inference_method);
-
             let mut continue_inference = false;
 
             let method = match child_inference {
@@ -460,43 +458,45 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
                 ChildInference::WithMethod(ref m) => m,
             };
 
-            method
+            let dyn_infer = method
                 .get_inner()
                 .or_else(|| self.base_inference_method.get_inner())
-                .unwrap_or(&StandardInfer {})
-                .infer(
-                    &mut Inferrer {
+                .unwrap_or(&StandardInfer {});
+
+            let mut base_rule = if continue_inference {
+                Either::Left(fallback_rule(rule, &mut *self.base_rule))
+            } else {
+                Either::Right(&mut *self.base_rule)
+            };
+
+            dyn_infer.infer(
+                &mut Inferrer {
+                    src: self.src,
+                    nodes: &mut nodes,
+                    parent_context: Some(&InferencePredicateContext {
                         src: self.src,
-                        nodes: &mut nodes,
-                        parent_context: Some(&InferencePredicateContext {
-                            src: self.src,
-                            nodes: &*self.nodes,
-                            parent: self.parent_context,
-                            index,
-                            child_inference: &default(),
-                        }),
-                        states: self.states,
-                        base_rule: if continue_inference {
-                            Some(&mut fallback_rule(rule, &mut self.base_rule))
-                        } else {
-                            self.base_rule.as_deref_mut()
-                        },
-                        base_inference_method: if continue_inference {
-                            parent_method
-                        } else {
-                            self.base_inference_method
-                        },
+                        nodes: &*self.nodes,
+                        parent: self.parent_context,
+                        index,
+                        child_inference: &default(),
+                    }),
+                    states: self.states,
+                    base_rule: match base_rule {
+                        Either::Left(ref mut rule) => rule,
+                        Either::Right(rule) => rule,
                     },
-                    method,
-                )
+                    base_inference_method: if continue_inference {
+                        parent_method
+                    } else {
+                        self.base_inference_method
+                    },
+                },
+                method,
+            )
         }
 
         {
-            let NodeType::Element {
-                value: ref mut element,
-                ..
-            } = self.nodes[index].node_type
-            else {
+            let Some(element) = self.nodes[index].as_element_mut() else {
                 return;
             };
             element.content.nodes = nodes;
@@ -512,7 +512,7 @@ pub fn infer<'cfg>(src: &'cfg str, content: &mut Content<'cfg>) {
             nodes: &mut content.nodes,
             parent_context: None,
             states: &mut default(),
-            base_rule: Some(&mut StandardInfer {}.define_rules().into_rules()),
+            base_rule: &mut StandardInfer {}.define_rules().into_rules(),
             base_inference_method: &method,
         },
         &method,

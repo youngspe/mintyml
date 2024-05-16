@@ -2,6 +2,7 @@ mod elements;
 mod selectors;
 mod text;
 
+use alloc::{vec, vec::Vec};
 use core::mem;
 
 use gramma::parse::{Location, LocationRange};
@@ -11,6 +12,7 @@ use crate::{
     error::{ItemType, MisplacedKind, SyntaxError, SyntaxErrorKind, UnclosedDelimiterKind},
     escape::escape_errors,
     utils::default,
+    OutputConfig,
 };
 
 pub use elements::*;
@@ -28,6 +30,51 @@ type BuildResult<T = ()> = Result<T, BuildError>;
 pub struct Node<'cfg> {
     pub range: LocationRange,
     pub node_type: NodeType<'cfg>,
+}
+
+impl<'cfg> Node<'cfg> {
+    pub fn item_type(&self) -> ItemType {
+        match self.node_type {
+            NodeType::Element { ref value } => match value.element_type {
+                ElementType::Paragraph {} => ItemType::Paragraph {},
+                ElementType::Standard { .. } => ItemType::Element {},
+                ElementType::Inline {} => ItemType::InlineElement {},
+                ElementType::Special {
+                    kind: SpecialKind::CodeBlockContainer,
+                } => todo!(),
+                ElementType::Special { .. } => ItemType::InlineElement {},
+            },
+            NodeType::TextLike { ref value } => match value {
+                TextLike::Text { .. } => ItemType::Text {},
+                TextLike::Comment { .. } => ItemType::Comment {},
+                TextLike::Space { .. } => ItemType::Space {},
+            },
+        }
+    }
+
+    pub fn as_element(&self) -> Option<&Element<'cfg>> {
+        match &self.node_type {
+            NodeType::Element { value } => Some(value),
+            NodeType::TextLike { .. } => None,
+        }
+    }
+
+    pub fn as_element_mut(&mut self) -> Option<&mut Element<'cfg>> {
+        match &mut self.node_type {
+            NodeType::Element { value } => Some(value),
+            NodeType::TextLike { .. } => None,
+        }
+    }
+
+    /// i.e. is not space or comment
+    pub fn is_visible(&self) -> bool {
+        !matches!(
+            self.node_type,
+            NodeType::TextLike {
+                value: TextLike::Comment { .. } | TextLike::Space { .. },
+            }
+        )
+    }
 }
 
 #[non_exhaustive]
@@ -130,8 +177,81 @@ impl<'cfg> BuildContext<'cfg> {
             ref lines,
             end,
         }: &ast::Content,
-    ) -> BuildResult<Content> {
-        todo!()
+    ) -> BuildResult<Content<'cfg>> {
+        let mut out_nodes = Vec::new();
+        let mut node_buf = Vec::new();
+        let range = LocationRange { start, end };
+        let mut consecutive_line = false;
+        let mut last_line_end = start;
+
+        for line in lines {
+            match line {
+                ast::Line::EmptyLine { newline } => {
+                    out_nodes.push(Node {
+                        range: newline.range,
+                        node_type: NodeType::TextLike {
+                            value: TextLike::Space {
+                                value: Space::ParagraphEnd {},
+                            },
+                        },
+                    });
+                    consecutive_line = false;
+                }
+                &ast::Line::NonEmptyLine {
+                    start,
+                    ref nodes,
+                    end,
+                } => {
+                    node_buf = self.build_line(&mut &nodes[..], node_buf)?;
+
+                    // Determine if this line should be added to the last element:
+                    if consecutive_line {
+                        let first_visible = node_buf.iter().find(|n| n.is_visible());
+
+                        let starts_with_element = first_visible
+                            .and_then(Node::as_element)
+                            .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
+                            .unwrap_or(false);
+
+                        if !starts_with_element {
+                            if let Some(last_element) = out_nodes
+                                .iter_mut()
+                                .rfind(|n| n.is_visible())
+                                .and_then(Node::as_element_mut)
+                                .filter(|e| {
+                                    matches!(
+                                        e.element_type,
+                                        ElementType::Standard {
+                                            delimiter: ElementDelimiter::Line { .. },
+                                        }
+                                    )
+                                })
+                            {
+                                let line_end_range = LocationRange {
+                                    start: last_line_end,
+                                    end: start,
+                                };
+                                last_element.content.nodes.push(Node {
+                                    range: line_end_range,
+                                    node_type: NodeType::TextLike {
+                                        value: Space::LineEnd {}.into(),
+                                    },
+                                });
+                                last_element.content.nodes.extend(mem::take(&mut node_buf));
+                            }
+                        }
+                    }
+                    consecutive_line = true;
+                    last_line_end = end;
+                    out_nodes.extend(mem::take(&mut node_buf))
+                }
+            }
+        }
+
+        Ok(Content {
+            range,
+            nodes: out_nodes,
+        })
     }
 
     /// Called when a child combinator has just been read
@@ -141,6 +261,7 @@ impl<'cfg> BuildContext<'cfg> {
         nodes: &mut &[(Option<ast::Space>, ast::Node)],
         out_nodes: &mut Vec<Node<'cfg>>,
         selectors: &mut Vec<Selector<'cfg>>,
+        last_range: LocationRange,
     ) -> BuildResult {
         let old_nodes = *nodes;
         if let Some((
@@ -155,6 +276,7 @@ impl<'cfg> BuildContext<'cfg> {
             ref rest,
         )) = nodes.split_first()
         {
+            let node_range = LocationRange { start, end };
             let prefix_range = LocationRange {
                 end,
                 ..prefix_range
@@ -163,19 +285,47 @@ impl<'cfg> BuildContext<'cfg> {
             match node_type {
                 ast::NodeType::Selector { selector } => {
                     selectors.push(self.build_selector(selector)?);
-                    return self.post_selector(prefix_range, nodes, out_nodes, selectors);
+                    return self.post_selector(
+                        prefix_range,
+                        nodes,
+                        out_nodes,
+                        selectors,
+                        node_range,
+                    );
                 }
                 ast::NodeType::Element {
-                    element: ast::Element::Line { .. },
+                    element: ast::Element::Block { value },
+                } => {
+                    out_nodes.push(
+                        Element {
+                            element_type: ElementDelimiter::LineBlock {
+                                combinator: last_range,
+                                block: node_range,
+                            }
+                            .into(),
+                            ..self.build_block(node_range, value)?
+                        }
+                        .into(),
+                    );
+                    return Ok(());
+                }
+                &ast::NodeType::Element {
+                    element: ast::Element::Line { combinator },
                 } => {
                     selectors.push(Selector::empty(start));
-                    return self.post_child_combinator(prefix_range, nodes, out_nodes, selectors);
+                    return self.post_child_combinator(
+                        prefix_range,
+                        nodes,
+                        out_nodes,
+                        selectors,
+                        combinator,
+                    );
                 }
                 _ => {}
             }
         }
         *nodes = old_nodes;
-        let children = self.build_line(nodes)?;
+        let children = self.build_line(nodes, default())?;
         let range = if let Some(n) = children.last() {
             prefix_range.combine(n.range)
         } else {
@@ -188,12 +338,17 @@ impl<'cfg> BuildContext<'cfg> {
 
         out_nodes.push(
             Element {
-                range,
                 selectors: mem::take(selectors),
                 content: Content {
                     range: content_range,
                     nodes: children,
                 },
+                ..Element::new(
+                    range,
+                    ElementDelimiter::Line {
+                        combinator: last_range,
+                    },
+                )
             }
             .into(),
         );
@@ -207,6 +362,7 @@ impl<'cfg> BuildContext<'cfg> {
         nodes: &mut &[(Option<ast::Space>, ast::Node)],
         out_nodes: &mut Vec<Node<'cfg>>,
         selectors: &mut Vec<Selector<'cfg>>,
+        last_range: LocationRange,
     ) -> BuildResult {
         let old_nodes = *nodes;
         if let Some((
@@ -241,12 +397,24 @@ impl<'cfg> BuildContext<'cfg> {
                 } => {
                     out_nodes.push(self.build_comment_node(comment)?);
 
-                    return self.post_selector(prefix_range, nodes, out_nodes, selectors);
+                    return self.post_selector(
+                        prefix_range,
+                        nodes,
+                        out_nodes,
+                        selectors,
+                        last_range,
+                    );
                 }
-                ast::NodeType::Element {
-                    element: ast::Element::Line { .. },
+                &ast::NodeType::Element {
+                    element: ast::Element::Line { combinator },
                 } => {
-                    return self.post_child_combinator(prefix_range, nodes, out_nodes, selectors);
+                    return self.post_child_combinator(
+                        prefix_range,
+                        nodes,
+                        out_nodes,
+                        selectors,
+                        combinator,
+                    );
                 }
                 ast::NodeType::Element {
                     element: ast::Element::Block { value },
@@ -302,7 +470,7 @@ impl<'cfg> BuildContext<'cfg> {
                 }
                 ast::NodeType::Selector { selector } => {
                     let mut selectors = vec![self.build_selector(selector)?];
-                    self.post_selector(node_range, nodes, out_nodes, &mut selectors);
+                    self.post_selector(node_range, nodes, out_nodes, &mut selectors, node_range)?;
                 }
                 ast::NodeType::Element {
                     element: ast::Element::Line { .. },
@@ -313,6 +481,7 @@ impl<'cfg> BuildContext<'cfg> {
                         nodes,
                         out_nodes,
                         &mut selectors,
+                        node_range,
                     );
                 }
                 ast::NodeType::Element { element } => {
@@ -325,15 +494,48 @@ impl<'cfg> BuildContext<'cfg> {
     }
 
     fn validate_line(&mut self, nodes: &mut Vec<Node<'cfg>>) -> BuildResult {
-        let _ = nodes;
-        todo!()
+        let mut last_item_type = None::<ItemType>;
+        let mut last_range = LocationRange::default();
+
+        for node in nodes {
+            let item_type = node.item_type();
+            let range = node.range;
+
+            if matches!(item_type, ItemType::Comment { .. } | ItemType::Space { .. }) {
+                continue;
+            }
+
+            use ItemType::*;
+            use MisplacedKind::*;
+
+            if let Some(last) = last_item_type {
+                let next = item_type;
+                let pre = last.as_slice();
+                let post = item_type.as_slice();
+                match (last, &item_type) {
+                    (Element {}, _) => {
+                        self.misplaced(last_range, MustNotPrecede { target: last, post })?
+                    }
+                    (_, Element {}) => {
+                        self.misplaced(range, MustNotFollow { pre, target: next })?
+                    }
+                    _ => {}
+                }
+            }
+
+            last_range = range;
+            last_item_type = Some(item_type);
+        }
+
+        Ok(())
     }
 
     fn build_line(
         &mut self,
         nodes: &mut &[(Option<ast::Space>, ast::Node)],
+        mut out_nodes: Vec<Node<'cfg>>,
     ) -> BuildResult<Vec<Node<'cfg>>> {
-        let mut out_nodes = Vec::new();
+        out_nodes.clear();
         self.extend_line(nodes, &mut out_nodes)?;
         self.validate_line(&mut out_nodes)?;
         Ok(out_nodes)
@@ -349,14 +551,14 @@ pub struct Document<'cfg> {
 impl<'cfg> Document<'cfg> {
     /// Converts an abstract syntax tree to a document.
     pub(crate) fn from_ast(
-        src: &str,
+        src: &'cfg str,
         ast: &ast::Document,
-        fail_fast: bool,
+        config: &OutputConfig<'cfg>,
     ) -> (Option<Self>, Vec<SyntaxError>) {
         let mut cx = BuildContext {
             src,
             errors: default(),
-            fail_fast,
+            fail_fast: config.fail_fast.unwrap_or(false),
         };
         let content = cx.build_content(&ast.content);
         let out = content.map(|content| Self {
@@ -369,5 +571,15 @@ impl<'cfg> Document<'cfg> {
             content,
         });
         (out.ok(), cx.errors)
+    }
+
+    pub(crate) fn parse(
+        src: &'cfg str,
+        config: &OutputConfig<'cfg>,
+    ) -> (Option<Self>, Vec<SyntaxError>) {
+        match ast::parse(src) {
+            Ok(ast) => Self::from_ast(src, &ast, config),
+            Err(e) => return (None, vec![e.into()]),
+        }
     }
 }

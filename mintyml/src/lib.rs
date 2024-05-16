@@ -19,7 +19,8 @@ pub mod error;
 pub(crate) mod escape;
 pub(crate) mod inference;
 pub(crate) mod output;
-pub(crate) mod transform;
+// TODO: restore this
+// pub(crate) mod transform;
 pub(crate) mod utils;
 
 use alloc::{borrow::Cow, string::String};
@@ -30,10 +31,10 @@ use output::OutputError;
 
 pub use config::{MetadataConfig, OutputConfig, SpecialTagConfig};
 
+pub use error::ConvertError;
 #[deprecated]
 #[doc(hidden)]
-pub use document::{SyntaxError, SyntaxErrorKind};
-pub use error::ConvertError;
+pub use error::{SyntaxError, SyntaxErrorKind};
 
 type Src<'src> = Cow<'src, str>;
 
@@ -161,7 +162,7 @@ fn convert_to_internal<'src>(
     forgive: bool,
 ) -> Result<(), ConvertError<'src>> {
     let config: &OutputConfig = config;
-    let (document, syntax_errors) = Document::parse_forgiving(src);
+    let (document, syntax_errors) = Document::parse(src, config);
 
     let mut document = match (document, syntax_errors.is_empty(), config.fail_fast) {
         (Some(d), true, _) | (Some(d), _, None | Some(false)) => d,
@@ -173,19 +174,22 @@ fn convert_to_internal<'src>(
         }
     };
 
-    if config.complete_page.unwrap_or(false) {
-        transform::complete_page::complete_page(&mut document, &config);
-    }
+    // TODO: restore this:
+    // if config.complete_page.unwrap_or(false) {
+    //     transform::complete_page::complete_page(&mut document, &config);
+    // }
 
-    transform::infer_elements::infer_elements(&mut document, &config.special_tags);
-    transform::apply_lang(&mut document, &config.lang);
+    // transform::infer_elements::infer_elements(&mut document, &config.special_tags);
+    // transform::apply_lang(&mut document, &config.lang);
 
-    if let Some(ref metadata) = config.metadata {
-        transform::metadata::add_metadata(&mut document, metadata);
-    }
+    // if let Some(ref metadata) = config.metadata {
+    //     transform::metadata::add_metadata(&mut document, metadata);
+    // }
+
+    inference::engine::infer(src, &mut document.content);
 
     if syntax_errors.is_empty() || forgive {
-        output::output_html_to(&document, out, config).map_err(|e| match e {
+        output::output_html_to(src, &document, out, config).map_err(|e| match e {
             OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
         })?;
     }

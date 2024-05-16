@@ -4,7 +4,7 @@ mod text;
 mod tokens;
 
 use alloc::vec::Vec;
-use gramma::ast::Discard;
+use gramma::ParseError;
 // TODO: figure out why importing isn't working and change this to an import
 type Location = gramma::parse::Location;
 
@@ -29,7 +29,7 @@ gramma::define_rule!(
     pub enum Line {
         EmptyLine {
             #[transform(ignore_after<Whitespace>)]
-            _newline: Discard<NewLine>,
+            newline: NewLine,
         },
         #[transform(ignore_around<Space>)]
         NonEmptyLine {
@@ -52,6 +52,10 @@ gramma::define_rule!(
         pub content: Content,
     }
 );
+
+pub fn parse(src: &str) -> Result<Document, ParseError> {
+    gramma::parse_tree::<Document, 1>(src)
+}
 
 #[cfg(test)]
 mod test {

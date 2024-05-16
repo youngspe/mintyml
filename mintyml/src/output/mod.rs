@@ -8,7 +8,7 @@ use core::{
 use alloc::string::String;
 
 use crate::{
-    document::{Document, Element, Node, NodeType, Selector, Space},
+    document::{Comment, Document, Element, Node, NodeType, Selector, Space, TextLike, TextSlice},
     escape::{unescape_parts, UnescapePart},
     utils::{default, to_lowercase},
     OutputConfig,
@@ -30,12 +30,13 @@ struct TagInfo {
     pub is_root: bool,
 }
 
-struct OutputContext<'cx, Out> {
+struct OutputContext<'cx, 'cfg, Out> {
+    src: &'cfg str,
     string_buf: String,
     out: &'cx mut Out,
-    config: &'cx OutputConfig<'cx>,
+    config: &'cx OutputConfig<'cfg>,
     indent_level: u32,
-    element: &'cx Element<'cx>,
+    element: Option<&'cx Element<'cfg>>,
     follows_space: bool,
 }
 
@@ -152,12 +153,24 @@ fn write_unescaped(src: &str, mut out: impl Write) -> fmt::Result {
     })
 }
 
-impl<'cx, Out> OutputContext<'cx, Out>
+impl<'cx, 'cfg, Out> OutputContext<'cx, 'cfg, Out>
 where
     Out: Write,
 {
     fn is_xml(&self) -> bool {
         self.config.xml == Some(true)
+    }
+
+    fn format_inline(&self) -> bool {
+        self.element.map(|e| e.format_inline()).unwrap_or(false)
+    }
+
+    fn is_raw(&self) -> bool {
+        self.element.map(|e| e.is_raw()).unwrap_or(false)
+    }
+
+    fn slice<'s>(&self, s: &'s TextSlice<'cfg>) -> &'s str {
+        s.as_str(self.src)
     }
 
     fn write_escape_unescape(&mut self, src: &str, quote: bool) -> OutputResult {
@@ -254,18 +267,18 @@ where
     }
 
     fn line(&mut self) -> OutputResult {
-        if !self.follows_space && self.element.mode == ContentMode::Block {
-            self._line()
-        } else {
+        if self.follows_space || self.format_inline() {
             Ok(())
+        } else {
+            self._line()
         }
     }
 
-    fn space(&mut self, space: Space) -> OutputResult {
+    fn space(&mut self, space: &Space) -> OutputResult {
         if !self.follows_space {
             match space {
-                Space::LineEnd | Space::ParagraphEnd
-                    if self.element.mode == ContentMode::Block && self.config.indent.is_some() =>
+                Space::LineEnd { .. } | Space::ParagraphEnd { .. }
+                    if !self.format_inline() && self.config.indent.is_some() =>
                 {
                     self._line()?
                 }
@@ -281,7 +294,7 @@ where
         by: u32,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
-        if self.element.mode == ContentMode::Block {
+        if !self.format_inline() {
             if self.config.indent.is_some() {
                 self.indent_level += by;
                 let out = f(self);
@@ -297,55 +310,53 @@ where
 
     fn in_content<T>(
         &mut self,
-        mut element: &'cx Element<'cx>,
+        element: &'cx Element<'cfg>,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
+        let mut element = Some(element);
         mem::swap(&mut element, &mut self.element);
         let out = f(self);
         self.element = element;
         out
     }
 
-    fn write_open_tag<'attr>(
+    fn write_open_tag(
         &mut self,
         tag: &str,
-        selector: &Selector,
+        selector: &Selector<'cfg>,
         self_close: bool,
     ) -> OutputResult {
-        let Selector {
-            class_names,
-            id,
-            attributes,
-            ..
-        } = selector;
         write!(self.out, "<{tag}")?;
 
-        if let Some(id) = id {
+        if let Some(id) = selector.id() {
             self.out.write_str(" id=\"")?;
-            self.write_escape_unescape(id, true)?;
+            self.write_escape_unescape(self.slice(id), true)?;
             self.out.write_char('"')?;
         }
 
-        if let Some((first, rest)) = class_names.split_first() {
+        let mut class_names = selector.class_names();
+        if let Some(first) = class_names.next() {
             self.out.write_str(" class=\"")?;
-            self.write_escape_unescape(first, true)?;
+            self.write_escape_unescape(self.slice(first), true)?;
 
-            for class in rest {
+            for class in class_names {
                 self.out.write_char(' ')?;
-                self.write_escape_unescape(class, true)?;
+                self.write_escape_unescape(self.slice(class), true)?;
             }
 
             self.out.write_char('"')?;
         }
 
-        for attr in attributes {
+        for (name, value) in selector.attributes() {
             self.out.write_char(' ')?;
-            self.write_unescape(&attr.name)?;
+            self.write_unescape(self.slice(name))?;
 
-            if let Some(value) = attr.value.as_ref() {
+            if let Some(value) = value {
                 self.out.write_str("=\"")?;
-                self.write_escape_unescape(&value, true)?;
+                self.write_escape_unescape(self.slice(value), true)?;
                 self.out.write_char('"')?;
+            } else if self.is_xml() {
+                self.out.write_str("=\"\"")?;
             }
         }
 
@@ -363,79 +374,103 @@ where
         Ok(())
     }
 
-    fn process_element(&mut self, element: &'cx Element<'cx>) -> OutputResult {
-        let SelectorElement::Name(tag) = &element.selector.element else {
+    fn process_element(&mut self, element: &'cx Element<'cfg>) -> OutputResult {
+        let get_valid_tags =
+            |e: &'cx Element<'cfg>| e.selectors.iter().filter_map(|s| Some((s.tag.name()?, s)));
+
+        let mut opening_tags = get_valid_tags(element).peekable();
+
+        if opening_tags.peek().is_none() {
             return self.in_content(element, |this| {
                 element
+                    .content
                     .nodes
                     .iter()
                     .try_for_each(|node| this.process_node(node))
             });
-        };
-
-        let tag_info = self.get_info(&tag);
-
-        if element.nodes.is_empty() && self.is_xml() {
-            self.write_open_tag(&tag, &element.selector, true)
-        } else {
-            self.write_open_tag(&tag, &element.selector, false)?;
-            self.in_content(element, |this| {
-                if !element.nodes.is_empty() {
-                    this.indent(if tag_info.is_root { 0 } else { 1 }, |this| {
-                        this.line()?;
-                        element
-                            .nodes
-                            .iter()
-                            .try_for_each(|node| this.process_node(node))
-                    })?;
-                    this.line()?;
-                }
-                if !tag_info.is_void {
-                    this.write_close_tag(&tag)?;
-                }
-                Ok(())
-            })
         }
+
+        let self_close_last = element.content.nodes.is_empty() && self.is_xml();
+        let mut last_tag_info = TagInfo::default();
+
+        while let Some((tag, selector)) = opening_tags.next() {
+            let tag = self.slice(tag);
+            let is_last = opening_tags.peek().is_none();
+            if is_last {
+                last_tag_info = self.get_info(tag);
+            }
+            let self_closing = is_last && self_close_last;
+            self.write_open_tag(tag, &selector, self_closing)?;
+        }
+
+        self.in_content(element, |this| {
+            if !element.content.nodes.is_empty() {
+                this.indent(if last_tag_info.is_root { 0 } else { 1 }, |this| {
+                    this.line()?;
+                    element
+                        .content
+                        .nodes
+                        .iter()
+                        .try_for_each(|node| this.process_node(node))
+                })?;
+                this.line()?;
+            }
+            for (tag, _) in get_valid_tags(element)
+                .rev()
+                .skip(if self_close_last { 1 } else { 0 })
+            {
+                let tag = this.slice(tag);
+                let tag_info = this.get_info(tag);
+                if !this.is_xml() && !tag_info.is_void {
+                    this.write_close_tag(tag)?;
+                }
+            }
+            Ok(())
+        })
     }
 
-    fn process_node(&mut self, node: &'cx Node<'cx>) -> OutputResult {
+    fn process_node(&mut self, node: &'cx Node<'cfg>) -> OutputResult {
         let out = match &node.node_type {
-            NodeType::Element(e) => self.process_element(e)?,
-            NodeType::Text(text) if text.value.is_empty() => {}
-            NodeType::Text(text) => {
-                let escape = text.escape;
-                let is_raw = !self.is_xml() && (text.raw || self.element.is_raw);
-                let mut write = |value| match (escape, is_raw) {
-                    (true, true) => self.write_unescape(value),
-                    (true, false) => self.write_escape_unescape(value, false),
-                    (false, true) => self.out.write_str(value).map_err(Into::into),
-                    (false, false) => self.write_escape(value, false),
-                };
+            NodeType::Element { value } => self.process_element(value)?,
+            NodeType::TextLike { value } => match value {
+                TextLike::Text { value: text } if text.slice.is_empty() => {}
+                TextLike::Text { value: text } => {
+                    let is_raw = !self.is_xml() && (text.escape_out || self.is_raw());
+                    let slice = self.slice(&text.slice);
 
-                let mut last_line = &*text.value;
+                    let mut write = |value| match (text.unescape_in, is_raw) {
+                        (true, true) => self.write_unescape(value),
+                        (true, false) => self.write_escape_unescape(value, false),
+                        (false, true) => self.out.write_str(value).map_err(Into::into),
+                        (false, false) => self.write_escape(value, false),
+                    };
 
-                if text.multiline {
-                    for line in trim_multiline(&text.value) {
-                        write(line)?;
-                        last_line = &line
+                    let mut last_line = slice;
+
+                    if text.multiline {
+                        for line in trim_multiline(slice) {
+                            write(line)?;
+                            last_line = line
+                        }
+                    } else {
+                        write(slice)?;
                     }
-                } else {
-                    write(&text.value)?;
-                }
 
-                self.follows_space = last_line.ends_with([' ', '\t']);
-            }
-            NodeType::Comment(comment) => {
-                self.out.write_str("<!--")?;
-                self.write_comment_body(&comment.value)?;
-                self.out.write_str("-->")?;
-                self.follows_space = false;
-            }
-            NodeType::Space(space) => {
-                self.space(*space)?;
-                self.follows_space = true
-            }
-            NodeType::Unknown => {}
+                    self.follows_space = last_line.ends_with([' ', '\t']);
+                }
+                TextLike::Comment {
+                    value: Comment::Tag { value },
+                } => {
+                    self.out.write_str("<!--")?;
+                    self.write_comment_body(self.slice(value))?;
+                    self.out.write_str("-->")?;
+                    self.follows_space = false;
+                }
+                TextLike::Space { value: space } => {
+                    self.space(space)?;
+                    self.follows_space = true
+                }
+            },
         };
 
         Ok(out)
@@ -456,32 +491,37 @@ impl From<fmt::Error> for OutputError {
 
 pub type OutputResult<T = ()> = Result<T, OutputError>;
 
-pub fn output_html_to(
-    document: &Document,
-    out: &mut impl Write,
-    config: &OutputConfig,
+pub fn output_html_to<'cx, 'cfg>(
+    src: &'cfg str,
+    document: &'cx Document<'cfg>,
+    out: &'cx mut impl Write,
+    config: &'cx OutputConfig<'cfg>,
 ) -> OutputResult {
-    let mut cx = OutputContext {
+    match (OutputContext::<'cx, 'cfg> {
+        src,
         string_buf: default(),
         out,
         config,
         indent_level: 0,
-        element: &default(),
+        element: None,
         follows_space: true,
-    };
+    }) {
+        mut cx => {
+            if cx.config.complete_page.unwrap_or(false) {
+                cx.out.write_str("<!DOCTYPE html>\n")?;
+            }
 
-    if cx.config.complete_page.unwrap_or(false) {
-        cx.out.write_str("<!DOCTYPE html>\n")?;
+            document
+                .content
+                .nodes
+                .iter()
+                .try_for_each(|node| cx.process_node(node))?;
+
+            cx.line()?;
+
+            Ok(())
+        }
     }
-
-    document
-        .nodes
-        .iter()
-        .try_for_each(|node| cx.process_node(node))?;
-
-    cx.line()?;
-
-    Ok(())
 }
 
 #[test]
@@ -556,15 +596,14 @@ section {
 }
     "#;
     let mut out = String::new();
-    output_html_to(
-        &Document::parse(src).unwrap(),
-        &mut out,
-        &OutputConfig {
-            indent: Some("  ".into()),
-            ..default()
-        },
-    )
-    .unwrap();
+    let config = OutputConfig {
+        indent: Some("  ".into()),
+        ..default()
+    };
+    let (document, errors) = Document::parse(src, &config);
+    let document = document.ok_or_else(|| errors).unwrap();
+
+    output_html_to(src, &document, &mut out, &config).unwrap();
     #[cfg(feature = "std")]
     {
         ::std::println!("{out}");

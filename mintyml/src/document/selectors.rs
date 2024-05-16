@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use gramma::parse::{Location, LocationRange};
 
 use crate::{
@@ -22,6 +24,32 @@ impl<'cfg> Selector<'cfg> {
             Tag::Explicit { .. } => false,
             Tag::Implicit { .. } | Tag::Wildcard { .. } => true,
         }
+    }
+
+    pub fn class_names(&self) -> impl Iterator<Item = &'_ TextSlice<'cfg>> {
+        self.items.iter().filter_map(|item| match item {
+            SelectorItem::Class { value, .. } => Some(value),
+            _ => None,
+        })
+    }
+
+    pub fn id(&self) -> Option<&TextSlice<'cfg>> {
+        self.items.iter().find_map(|item| match item {
+            SelectorItem::Id { value, .. } => Some(value),
+            _ => None,
+        })
+    }
+
+    pub fn attributes(
+        &self,
+    ) -> impl Iterator<Item = (&'_ TextSlice<'cfg>, Option<&'_ TextSlice<'cfg>>)> {
+        self.items
+            .iter()
+            .flat_map(|item| match item {
+                SelectorItem::Attributes { attributes, .. } => &attributes[..],
+                _ => &[],
+            })
+            .map(|a| (&a.name, a.value.as_ref()))
     }
 }
 
@@ -52,6 +80,15 @@ pub enum Tag<'cfg> {
     Implicit {},
     #[non_exhaustive]
     Wildcard { range: LocationRange },
+}
+
+impl<'cfg> Tag<'cfg> {
+    pub fn name(&self) -> Option<&TextSlice<'cfg>> {
+        match self {
+            Self::Explicit { value } => Some(value),
+            _ => None,
+        }
+    }
 }
 
 impl<'cfg> From<TextSlice<'cfg>> for Tag<'cfg> {
@@ -101,7 +138,7 @@ impl<'cfg> BuildContext<'cfg> {
             ref assignment,
             end,
         }: &ast::Attribute,
-    ) -> BuildResult<Attribute> {
+    ) -> BuildResult<Attribute<'cfg>> {
         let value_range = match assignment {
             Some(AttributeAssignment { value, .. }) => match value {
                 ast::AttributeValue::Unquoted { value } => Some(value.range),
@@ -197,7 +234,7 @@ impl<'cfg> BuildContext<'cfg> {
             ref segments,
             end,
         }: &ast::Selector,
-    ) -> BuildResult<Selector> {
+    ) -> BuildResult<Selector<'cfg>> {
         let range = LocationRange { start, end };
         let element = self.build_tag(element)?;
 

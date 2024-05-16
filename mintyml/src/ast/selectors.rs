@@ -1,10 +1,6 @@
 use alloc::vec::Vec;
 
-use either::Either;
-use gramma::{
-    ast::{Ignore, Partial},
-    parse::{Location, LocationRange},
-};
+use gramma::parse::{Location, LocationRange};
 
 use super::tokens::*;
 

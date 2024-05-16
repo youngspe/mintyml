@@ -1,5 +1,7 @@
 use core::mem;
 
+use alloc::{vec, vec::Vec};
+
 use derive_more::Display;
 use gramma::parse::LocationRange;
 
@@ -29,7 +31,21 @@ pub enum ElementType {
     #[non_exhaustive]
     Standard { delimiter: ElementDelimiter },
     #[non_exhaustive]
-    MultilineCode {},
+    Inline {},
+    #[non_exhaustive]
+    Special { kind: SpecialKind },
+}
+
+impl From<SpecialKind> for ElementType {
+    fn from(kind: SpecialKind) -> Self {
+        Self::Special { kind }
+    }
+}
+
+impl From<ElementDelimiter> for ElementType {
+    fn from(delimiter: ElementDelimiter) -> Self {
+        Self::Standard { delimiter }
+    }
 }
 
 #[non_exhaustive]
@@ -39,9 +55,30 @@ pub struct Element<'cfg> {
     pub content: Content<'cfg>,
     pub element_type: ElementType,
     pub(crate) inference_method: ChildInference<'cfg>,
+    pub(super) format_inline: bool,
+    pub(super) is_raw: bool,
 }
 
 impl<'cfg> Element<'cfg> {
+    pub fn new(range: LocationRange, element_type: impl Into<ElementType>) -> Self {
+        Self {
+            range,
+            element_type: element_type.into(),
+            selectors: Vec::new(),
+            content: Content {
+                range,
+                nodes: default(),
+            },
+            inference_method: ChildInference::default(),
+            format_inline: false,
+            is_raw: false,
+        }
+    }
+
+    pub fn is_raw(&self) -> bool {
+        self.is_raw
+    }
+
     /// If `selectors` contains an uninferred tag at index >= 1, split the element
     /// into two nested elements so that the uninferred tag is at index 0 of the child element.
     pub fn split_uninferred(&mut self) {
@@ -62,9 +99,23 @@ impl<'cfg> Element<'cfg> {
                 },
                 element_type: self.element_type.clone(),
                 inference_method: ChildInference::default(),
+                format_inline: self.format_inline,
+                is_raw: self.is_raw,
             };
             self.content.nodes = vec![new_element.into()];
+            self.format_inline = true;
         }
+    }
+
+    pub(crate) fn format_inline(&self) -> bool {
+        self.format_inline
+            || matches!(
+                self.element_type,
+                ElementType::Standard {
+                    delimiter: ElementDelimiter::Line { .. }
+                } | ElementType::Inline { .. }
+                    | ElementType::Special { .. }
+            )
     }
 }
 
@@ -109,7 +160,7 @@ impl<'cfg> BuildContext<'cfg> {
         &mut self,
         range: LocationRange,
         ast: &ast::InlineSpecial,
-    ) -> BuildResult<Element> {
+    ) -> BuildResult<Element<'cfg>> {
         use ast::InlineSpecial::*;
 
         let (open, content, is_unclosed) = match ast {
@@ -120,15 +171,14 @@ impl<'cfg> BuildContext<'cfg> {
             Quote { open, inner, close } => (open.range, inner, close.is_none()),
             Code { code } => {
                 return Ok(Element {
-                    range,
-                    selectors: default(),
                     content: {
                         let mut range = code.range;
                         // shave off the first and last 2 chars ("<`", "`>")
                         range.start += 2;
                         range.end -= 2;
-                        self.build_text_node(range, false, true)?.into()
+                        self.build_text_node(range, false, true, false)?.into()
                     },
+                    ..Element::new(range, SpecialKind::Code)
                 });
             }
         };
@@ -147,9 +197,8 @@ impl<'cfg> BuildContext<'cfg> {
         }
 
         Ok(Element {
-            range,
-            selectors: default(),
             content: self.build_content(content)?,
+            ..Element::new(range, kind)
         })
     }
 
@@ -157,14 +206,13 @@ impl<'cfg> BuildContext<'cfg> {
         &mut self,
         range: LocationRange,
         ast::Inline { open, inner, close }: &ast::Inline,
-    ) -> BuildResult<Element> {
+    ) -> BuildResult<Element<'cfg>> {
         if close.is_none() {
             self.unclosed(open.range, UnclosedDelimiterKind::Inline {})?;
         }
         Ok(Element {
-            range,
-            selectors: default(),
             content: self.build_content(inner)?,
+            ..Element::new(range, ElementType::Inline {})
         })
     }
 
@@ -176,14 +224,13 @@ impl<'cfg> BuildContext<'cfg> {
             content,
             r_brace,
         }: &ast::Block,
-    ) -> BuildResult<Element> {
+    ) -> BuildResult<Element<'cfg>> {
         if r_brace.is_none() {
             self.unclosed(l_brace.range, UnclosedDelimiterKind::Block {})?;
         }
         Ok(Element {
-            range,
-            selectors: default(),
             content: self.build_content(content)?,
+            ..Element::new(range, ElementDelimiter::Block { block: range })
         })
     }
 
@@ -191,11 +238,9 @@ impl<'cfg> BuildContext<'cfg> {
         &mut self,
         range: LocationRange,
         ast: &ast::Element,
-    ) -> BuildResult<Element> {
+    ) -> BuildResult<Element<'cfg>> {
         Ok(match ast {
-            ast::Element::Line { .. } => Element {
-                range,
-                selectors: default(),
+            &ast::Element::Line { combinator } => Element {
                 content: Content {
                     range: LocationRange {
                         start: range.end,
@@ -203,6 +248,7 @@ impl<'cfg> BuildContext<'cfg> {
                     },
                     nodes: default(),
                 },
+                ..Element::new(range, ElementDelimiter::Line { combinator })
             },
             ast::Element::Block { value } => self.build_block(range, value)?,
             ast::Element::MultilineCode { value } => {

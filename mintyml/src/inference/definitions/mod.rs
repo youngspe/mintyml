@@ -1,4 +1,4 @@
-use super::engine::{rule, rules, when::*, DefineRules, Infer, InferencePredicate, RuleSet};
+use super::engine::{rule, rules, when::*, DefineRules, Infer};
 
 #[rustfmt::skip]
 fn contains_phrasing(tag: &str) -> bool {

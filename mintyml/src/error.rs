@@ -1,5 +1,7 @@
 use core::fmt::{self, Display};
 
+use alloc::vec::Vec;
+
 use derive_more::Display;
 use gramma::{parse::LocationRange, ParseError};
 
@@ -138,7 +140,7 @@ pub enum UnclosedDelimiterKind {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Display, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ItemType {
     #[non_exhaustive]
     #[display(fmt = "selector")]
@@ -146,6 +148,39 @@ pub enum ItemType {
     #[non_exhaustive]
     #[display(fmt = "element")]
     Element {},
+    #[non_exhaustive]
+    #[display(fmt = "paragraph")]
+    Paragraph {},
+    #[non_exhaustive]
+    #[display(fmt = "text")]
+    Text {},
+    #[non_exhaustive]
+    #[display(fmt = "inline element")]
+    InlineElement {},
+    #[non_exhaustive]
+    #[display(fmt = "comment")]
+    Comment {},
+    #[non_exhaustive]
+    #[display(fmt = "space")]
+    Space {},
+    #[non_exhaustive]
+    #[display(fmt = "<unknown>")]
+    Unknown {},
+}
+
+impl ItemType {
+    pub fn as_slice(&self) -> &'static [Self] {
+        match self {
+            ItemType::Selector {} => &[ItemType::Selector {}],
+            ItemType::Element {} => &[ItemType::Element {}],
+            ItemType::Paragraph {} => &[ItemType::Paragraph {}],
+            ItemType::Text {} => &[ItemType::Text {}],
+            ItemType::InlineElement {} => &[ItemType::InlineElement {}],
+            ItemType::Comment {} => &[ItemType::Comment {}],
+            ItemType::Space {} => &[ItemType::Space {}],
+            ItemType::Unknown {} => &[ItemType::Unknown {}],
+        }
+    }
 }
 
 fn display_conjunction_list<I: IntoIterator>(list: I, conjunction: impl Display) -> impl Display

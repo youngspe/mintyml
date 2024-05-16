@@ -1,4 +1,4 @@
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow, string::String};
 use gramma::parse::LocationRange;
 
 use crate::{ast, utils::default};
@@ -69,6 +69,7 @@ impl<'cfg> Default for TextSlice<'cfg> {
 #[non_exhaustive]
 pub struct Text<'cfg> {
     pub slice: TextSlice<'cfg>,
+    pub multiline: bool,
     pub unescape_in: bool,
     pub escape_out: bool,
 }
@@ -81,6 +82,12 @@ pub enum TextLike<'cfg> {
     Comment { value: Comment<'cfg> },
     #[non_exhaustive]
     Space { value: Space<'cfg> },
+}
+
+impl<'cfg> From<Space<'cfg>> for TextLike<'cfg> {
+    fn from(value: Space<'cfg>) -> Self {
+        Self::Space { value }
+    }
 }
 
 /// Represents some kind of whitespace that should be considered when converting to HTML.
@@ -113,6 +120,7 @@ impl<'cfg> BuildContext<'cfg> {
         range: LocationRange,
         unescape_in: bool,
         escape_out: bool,
+        multiline: bool,
     ) -> BuildResult<Node<'cfg>> {
         Ok(Node {
             range,
@@ -122,6 +130,7 @@ impl<'cfg> BuildContext<'cfg> {
                         slice: self.escapable_slice(range, unescape_in)?,
                         unescape_in,
                         escape_out,
+                        multiline,
                     },
                 },
             },
@@ -131,7 +140,7 @@ impl<'cfg> BuildContext<'cfg> {
     fn build_verbatim_node(
         &mut self,
         ast::Verbatim { open, raw, tail }: &ast::Verbatim,
-    ) -> BuildResult<Node> {
+    ) -> BuildResult<Node<'cfg>> {
         let (tail_range, hash_count) = match tail {
             ast::VerbatimTail::Verbatim0 { value } => (value.range, 0),
             ast::VerbatimTail::Verbatim1 { value } => (value.range, 1),
@@ -160,22 +169,25 @@ impl<'cfg> BuildContext<'cfg> {
                         slice: self.slice(content_range),
                         unescape_in: false,
                         escape_out: raw.is_none(),
+                        multiline: false,
                     },
                 },
             },
         })
     }
 
-    pub fn build_inline_text(&mut self, text: &ast::InlineText) -> BuildResult<Node> {
+    pub fn build_inline_text(&mut self, text: &ast::InlineText) -> BuildResult<Node<'cfg>> {
         Ok(match text {
-            ast::InlineText::Segment { value } => self.build_text_node(value.range, true, true)?,
+            ast::InlineText::Segment { value } => {
+                self.build_text_node(value.range, true, true, false)?
+            }
             ast::InlineText::Verbatim { value } => self.build_verbatim_node(value)?,
             ast::InlineText::Comment { comment } => {
                 let _ = comment;
                 todo!()
             }
             ast::InlineText::Interpolation { interpolation } => {
-                self.build_text_node(interpolation.range, false, false)?
+                self.build_text_node(interpolation.range, false, false, false)?
             }
         })
     }
@@ -189,7 +201,7 @@ impl<'cfg> BuildContext<'cfg> {
             ref close,
             end,
         }: &ast::Comment,
-    ) -> BuildResult<Node> {
+    ) -> BuildResult<Node<'cfg>> {
         let range = LocationRange { start, end };
 
         if close.is_none() {
@@ -208,7 +220,7 @@ impl<'cfg> BuildContext<'cfg> {
         })
     }
 
-    pub fn exact_space(&mut self, range: LocationRange) -> BuildResult<Node> {
+    pub fn exact_space(&mut self, range: LocationRange) -> BuildResult<Node<'cfg>> {
         Ok(Node {
             range,
             node_type: NodeType::TextLike {
@@ -221,7 +233,10 @@ impl<'cfg> BuildContext<'cfg> {
         })
     }
 
-    pub fn inline_space(&mut self, range: impl Into<Option<LocationRange>>) -> BuildResult<Node> {
+    pub fn inline_space(
+        &mut self,
+        range: impl Into<Option<LocationRange>>,
+    ) -> BuildResult<Node<'cfg>> {
         let range = range.into();
         Ok(Node {
             range: range.unwrap_or(LocationRange::INVALID),

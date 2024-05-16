@@ -25,7 +25,8 @@ pub trait InferenceRule<'cfg> {
     fn height(&self) -> usize;
 }
 
-struct EmptyRule;
+#[non_exhaustive]
+pub struct EmptyRule {}
 
 impl InferenceRule<'_> for EmptyRule {
     fn test_rule(
@@ -53,7 +54,7 @@ pub struct RuleImpl<P, A> {
     pub(crate) action: A,
 }
 
-struct RulePair<R1, R2> {
+pub struct RulePair<R1, R2> {
     prev_rules: R1,
     rule: R2,
     height: usize,
@@ -99,7 +100,7 @@ where
         &mut self,
         depth: usize,
         max_depth: usize,
-        cx: &InferencePredicateContext,
+        cx: &InferencePredicateContext<'cfg, '_>,
     ) -> Result<Option<usize>, usize> {
         if depth > max_depth {
             return Ok(None);
@@ -250,18 +251,19 @@ where
         self.child_inference(ChildInference::Revert)
     }
 
-    pub fn inference_method<M>(self, method: impl IntoInferenceMethod<'cfg, M>) -> Self {
+    pub fn inference_method<M>(self, method: impl IntoInferenceMethod<'cfg, M> + 'cfg) -> Self {
         self.child_inference(ChildInference::WithMethod(method.into_inference_method()))
     }
 }
 
 pub fn rules<'cfg>() -> RuleSet<'cfg, EmptyRule, impl InferencePredicate> {
     RuleSet {
-        rules: EmptyRule,
+        rules: EmptyRule {},
         pred: when::any(),
         child_inference: default(),
     }
 }
+
 pub fn rule<'cfg, P, A>(pred: InferWhen<P>, action: A) -> RuleImpl<P, A>
 where
     P: InferencePredicate,
@@ -298,41 +300,5 @@ where
 
     fn height(&self) -> usize {
         R::height(self)
-    }
-}
-
-impl<'cfg, R> InferenceRule<'cfg> for Option<R>
-where
-    R: InferenceRule<'cfg>,
-{
-    fn test_rule(
-        &mut self,
-        depth: usize,
-        max_depth: usize,
-        cx: &InferencePredicateContext<'cfg, '_>,
-    ) -> Result<Option<usize>, usize> {
-        self.as_mut()
-            .map(|this| this.test_rule(depth, max_depth, cx))
-            .unwrap_or(Ok(None))
-    }
-
-    fn apply_rule(
-        &mut self,
-        depth: usize,
-        target_depth: usize,
-        target: &mut InferenceTarget<'cfg, '_>,
-    ) {
-        self.as_mut()
-            .map(|this| this.apply_rule(depth, target_depth, target));
-    }
-
-    fn direction_precedence(&self) -> DirectionPrecedence {
-        self.as_mut()
-            .map(|this| this.direction_precedence())
-            .unwrap_or_default()
-    }
-
-    fn height(&self) -> usize {
-        self.as_mut().map(|this| this.height()).unwrap_or(0)
     }
 }

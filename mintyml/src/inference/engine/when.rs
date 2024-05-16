@@ -193,7 +193,7 @@ mod relative {
                     match (cx.index, 0, cx.nodes.len()) {
                         ($idx, $lo, $hi) => {
                             for index in $which {
-                                out.and(
+                                out = out.and(
                                     match self.0.test(&InferencePredicateContext { index, ..*cx }) {
                                         Ok(true) => return Ok(true),
                                         res => res,
@@ -225,9 +225,15 @@ mod relative {
     impl_relative!(
         just_before,
         JustBefore,
-        |i, _, hi| (i + 1 < hi).then_some(i + 1),
+        |i, _, hi| (i + 1 < hi).then_some(i + 1).into_iter(),
         any,
         -1
     );
-    impl_relative!(just_after, JustAfter, |i, lo, _| i.checked_sub(1), any, 1);
+    impl_relative!(
+        just_after,
+        JustAfter,
+        |i, lo, _| (lo + 1 <= i).then_some(i - 1).into_iter(),
+        any,
+        1
+    );
 }
