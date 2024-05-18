@@ -1,4 +1,7 @@
-use super::engine::{rule, rules, when::*, DefineRules, Infer};
+mod specialty;
+mod table;
+
+use super::engine::{define_methods, when::*, Infer, MethodDefinition, TagDefinition};
 
 #[rustfmt::skip]
 fn contains_phrasing(tag: &str) -> bool {
@@ -18,26 +21,56 @@ fn contains_blocks(tag: &str) -> bool {
     )
 }
 
+#[rustfmt::skip]
+fn is_void(tag: &str) -> bool {
+    matches!(tag,
+        | "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta"
+        | "param" | "source" | "track" | "wbr"
+    )
+}
+
+fn common_methods<'cfg>() -> impl MethodDefinition<'cfg> {
+    define_methods()
+        .when(
+            tag_where(contains_phrasing) | tag_where(is_void),
+            &PhrasingInfer {},
+        )
+        .when(tag("html"), &specialty::RootInfer {})
+        .when(tag_where(contains_blocks), &StandardInfer {})
+        .when(tag_in(["ul", "ol", "menu"]), &specialty::ListInfer {})
+        .when(
+            tag_in(["table", "thead", "tbody", "tfoot"]),
+            &table::TableInfer {},
+        )
+        .when(tag_in(["tr"]), &table::RowInfer {})
+        .when(tag_in(["colgroup"]), &table::ColGroupInfer {})
+        .when(tag("dl"), &specialty::DescriptionListInfer {})
+        .when(
+            tag_in(["optgroup", "datalist"]),
+            &specialty::OptGroupInfer {},
+        )
+        .when(tag("select"), &specialty::SelectInfer {})
+        .when(tag("map"), &specialty::MapInfer {})
+        .when(tag("details"), &specialty::DetailsInfer {})
+        .when(tag("label"), &specialty::LabelInfer {})
+        .when(tag("fieldset"), &specialty::FieldSetInfer {})
+        .when(tag("picture"), &specialty::PictureInfer {})
+}
+
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct StandardInfer {}
 
 impl<'cfg> Infer<'cfg> for StandardInfer {
-    fn define_rules(&self) -> impl DefineRules<'cfg> {
-        rules()
-            .add(
-                PhrasingInfer {}
-                    .define_rules()
-                    .into_rules()
-                    .when(child_of(tag_where(contains_phrasing)))
-                    .inference_method(&PhrasingInfer {}),
-            )
-            .add(
-                rules()
-                    .when(tag_where(contains_blocks))
-                    .inference_method(&BlockInfer {}),
-            )
-            .add(BlockInfer {}.define_rules().into_rules())
+    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
+        definition.when(line() | paragraph(), "p").default("div")
+    }
+
+    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
+        definition
+            .append(common_methods())
+            .when(line() | paragraph(), &PhrasingInfer {})
+            .default(&StandardInfer {})
     }
 }
 
@@ -46,30 +79,18 @@ impl<'cfg> Infer<'cfg> for StandardInfer {
 pub struct PhrasingInfer {}
 
 impl<'cfg> Infer<'cfg> for PhrasingInfer {
-    fn define_rules(&self) -> impl DefineRules<'cfg> {
-        rules()
-            .inherit_inference()
-            .add(rule(paragraph(), |t| t.dissolve()))
-            .add(rule(line() | block(), |t| t.tag("span")))
+    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
+        definition.when(paragraph(), "").default("span")
     }
-}
 
-#[non_exhaustive]
-#[derive(Debug)]
-pub struct BlockInfer {}
-
-impl<'cfg> Infer<'cfg> for BlockInfer {
-    fn define_rules(&self) -> impl DefineRules<'cfg> {
-        rules()
-            .add(
-                rules()
-                    .when(tag_where(contains_phrasing))
-                    .inference_method(&PhrasingInfer {}),
+    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
+        definition
+            .append(common_methods())
+            .when(
+                tag_where(contains_phrasing) | tag_where(contains_blocks),
+                &PhrasingInfer {},
             )
-            .inherit_inference()
-            .add(rule(line() | paragraph(), |t| {
-                t.tag("p").inference_method(&PhrasingInfer {})
-            }))
-            .add(rule(block(), |t| t.tag("div")))
+            .when(block(), &StandardInfer {})
+            .default(&PhrasingInfer {})
     }
 }

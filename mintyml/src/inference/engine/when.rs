@@ -5,8 +5,7 @@ use crate::{
 };
 
 use super::{
-    rules, DirectionPrecedence, Incomplete, InferencePredicate, InferencePredicateContext,
-    InferenceTarget, TestResult,
+    DirectionPrecedence, Incomplete, InferencePredicate, InferencePredicateContext, TestResult,
 };
 
 pub struct InferWhen<P>(P);
@@ -19,23 +18,6 @@ impl<P: InferencePredicate> InferencePredicate for InferWhen<P> {
 
 pub fn when<P: InferencePredicate>(pred: P) -> InferWhen<P> {
     InferWhen(pred)
-}
-
-impl<P> InferWhen<P>
-where
-    P: InferencePredicate,
-{
-    pub fn then_apply<'cfg, A>(self, action: A) -> rules::RuleImpl<P, A>
-    where
-        A: for<'a, 'b> FnMut(
-            &'a mut InferenceTarget<'cfg, 'b>,
-        ) -> &'a mut InferenceTarget<'cfg, 'b>,
-    {
-        rules::RuleImpl {
-            pred: self.0,
-            action,
-        }
-    }
 }
 
 struct PredImpl<Test, DirPrec, Data> {
@@ -169,6 +151,14 @@ pub fn child_of(pred: impl InferencePredicate) -> InferWhen<impl InferencePredic
     })
 }
 
+pub fn first() -> InferWhen<impl InferencePredicate> {
+    !after(any())
+}
+
+pub fn last() -> InferWhen<impl InferencePredicate> {
+    !before(any())
+}
+
 pub fn descendant_of(pred: impl InferencePredicate) -> InferWhen<impl InferencePredicate> {
     pred_impl_with(pred, |pred, mut cx| {
         while let Some(parent) = cx.parent {
@@ -237,3 +227,5 @@ mod relative {
         1
     );
 }
+
+pub use relative::*;

@@ -1,71 +1,253 @@
-mod rules;
 pub mod when;
 
-use core::{cell::Cell, fmt, mem};
+use core::{
+    borrow::{Borrow, BorrowMut},
+    fmt, mem,
+};
 
 use alloc::{borrow::Cow, rc::Rc, string::String, vec::Vec};
 
 use derive_more::Add;
-use either::{Either, IntoEither};
+use either::IntoEither;
 
 use crate::{
     document::{Content, Element, Node, NodeType, Selector, TextSlice},
     utils::default,
 };
 
-pub use rules::{rule, rules, DefineRules};
-pub use when::{when, InferWhen};
-
-use self::rules::InferenceRule;
-
 use super::definitions::StandardInfer;
 
-pub trait Infer<'cfg>: fmt::Debug {
-    fn define_rules(&self) -> impl DefineRules<'cfg>;
+mod sealed {
+    use super::*;
+    pub trait InferTest<'cfg, T: ?Sized> {
+        fn test(
+            &mut self,
+            cx: &InferencePredicateContext<'cfg, '_>,
+            index: usize,
+            start_index: usize,
+        ) -> Result<Option<&mut T>, usize>;
+
+        fn direction_precedence(&self) -> DirectionPrecedence;
+    }
+}
+use sealed::InferTest;
+
+pub trait InferenceDefinition<'cfg, T: ?Sized>: InferTest<'cfg, T> {
+    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T>
+    where
+        Self: Sized;
+}
+
+struct TagFn<F>(F);
+
+fn tag_fn<'cfg>(
+    f: impl FnMut(&mut Element<'cfg>) + 'cfg,
+) -> TagFn<impl FnMut(&mut Element<'cfg>) + 'cfg> {
+    TagFn(f)
+}
+
+impl<'cfg, F: FnMut(&mut Element<'cfg>) + 'cfg> Borrow<TagDefinitionItem<'cfg>> for TagFn<F> {
+    fn borrow(&self) -> &(TagDefinitionItem<'cfg>) {
+        &self.0
+    }
+}
+
+impl<'cfg, F: FnMut(&mut Element<'cfg>) + 'cfg> BorrowMut<TagDefinitionItem<'cfg>> for TagFn<F> {
+    fn borrow_mut(&mut self) -> &mut (TagDefinitionItem<'cfg>) {
+        &mut self.0
+    }
+}
+
+struct InferenceDefinitionPair<Pred, Next, T> {
+    pred: Pred,
+    value: T,
+    next: Next,
+}
+
+type TagDefinitionItem<'cfg> = dyn FnMut(&mut Element<'cfg>) + 'cfg;
+
+pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
+    'cfg + InferenceDefinition<'cfg, TagDefinitionItem<'cfg>> + Sized
+{
+    fn apply(self, other: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
+        self.append(other)
+    }
+    fn apply_from(self, other: &impl Infer<'cfg>) -> impl TagDefinition<'cfg> {
+        self.apply(other.define_tags())
+    }
+
+    fn when<M>(
+        self,
+        pred: impl InferencePredicate,
+        value: impl IntoTags<'cfg, M>,
+    ) -> impl TagDefinition<'cfg> {
+        let tags = value.tags();
+        self.append(InferenceDefinitionPair {
+            pred,
+            value: tag_fn::<'cfg>(move |element: &mut Element<'cfg>| {
+                apply_tags(element, tags.clone())
+            }),
+            next: define_tags(),
+        })
+    }
+    fn default<M>(self, value: impl IntoTags<'cfg, M>) -> impl TagDefinition<'cfg> {
+        self.when(when::any(), value)
+    }
+}
+pub trait MethodDefinition<'cfg, _Bound = &'cfg Self>:
+    'cfg + InferenceDefinition<'cfg, InferenceMethod<'cfg>> + Sized
+{
+    fn apply(self, other: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
+        self.append(other)
+    }
+
+    fn apply_from(self, other: &impl Infer<'cfg>) -> impl MethodDefinition<'cfg> {
+        self.apply(other.define_methods())
+    }
+
+    fn when<M>(
+        self,
+        pred: impl InferencePredicate,
+        value: impl IntoInferenceMethod<'cfg, M>,
+    ) -> impl MethodDefinition<'cfg> {
+        self.append(InferenceDefinitionPair {
+            pred,
+            value: value.into_inference_method(),
+            next: EmptyInferenceDefinition,
+        })
+    }
+    fn default<M>(self, value: impl IntoInferenceMethod<'cfg, M>) -> impl MethodDefinition<'cfg> {
+        self.when(when::any(), value)
+    }
+}
+
+impl<'cfg, D> TagDefinition<'cfg> for D where D: InferenceDefinition<'cfg, TagDefinitionItem<'cfg>> {}
+
+impl<'cfg, D> MethodDefinition<'cfg> for D where D: InferenceDefinition<'cfg, InferenceMethod<'cfg>> {}
+
+struct EmptyInferenceDefinition;
+
+pub fn define_tags<'cfg>() -> impl TagDefinition<'cfg> {
+    EmptyInferenceDefinition
+}
+
+pub fn define_methods<'cfg>() -> impl MethodDefinition<'cfg> {
+    EmptyInferenceDefinition
+}
+
+impl<'cfg, T: ?Sized> InferTest<'cfg, T> for EmptyInferenceDefinition {
+    fn test(
+        &mut self,
+        _: &InferencePredicateContext<'cfg, '_>,
+        _: usize,
+        _: usize,
+    ) -> Result<Option<&mut T>, usize> {
+        Ok(None)
+    }
+
+    fn direction_precedence(&self) -> DirectionPrecedence {
+        default()
+    }
+}
+
+impl<'cfg, T: ?Sized> InferenceDefinition<'cfg, T> for EmptyInferenceDefinition {
+    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T> {
+        other
+    }
+}
+
+impl<'cfg, Pred, Next, T, B> InferTest<'cfg, T> for InferenceDefinitionPair<Pred, Next, B>
+where
+    T: ?Sized,
+    B: BorrowMut<T>,
+    Pred: InferencePredicate,
+    Next: InferenceDefinition<'cfg, T>,
+{
+    fn test(
+        &mut self,
+        cx: &InferencePredicateContext<'cfg, '_>,
+        index: usize,
+        start_index: usize,
+    ) -> Result<Option<&mut T>, usize> {
+        if index >= start_index {
+            if self.pred.test(cx).map_err(|_| index)? {
+                return Ok(Some(self.value.borrow_mut()));
+            }
+        }
+
+        self.next.test(cx, index + 1, start_index)
+    }
+
+    fn direction_precedence(&self) -> DirectionPrecedence {
+        self.pred.direction_precedence() + self.next.direction_precedence()
+    }
+}
+
+impl<'cfg, Pred, Next, T, B> InferenceDefinition<'cfg, T> for InferenceDefinitionPair<Pred, Next, B>
+where
+    T: ?Sized,
+    B: BorrowMut<T>,
+    Pred: InferencePredicate,
+    Next: InferenceDefinition<'cfg, T>,
+{
+    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T> {
+        let Self { pred, value, next } = self;
+        InferenceDefinitionPair {
+            pred,
+            value,
+            next: next.append(other),
+        }
+    }
+}
+
+pub trait Infer<'cfg, _Bound = &'cfg Self>: 'cfg + fmt::Debug {
+    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg>;
+    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
+        StandardInfer {}.with_methods(definition)
+    }
+
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        self.with_tags(define_tags())
+    }
+
+    fn define_methods(&self) -> impl MethodDefinition<'cfg> {
+        self.with_methods(define_methods())
+    }
 }
 
 trait DynInfer<'cfg>: fmt::Debug {
-    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_, '_>, method: &InferenceMethod<'cfg>);
+    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>);
 }
 
 impl<'cfg, I: Infer<'cfg>> DynInfer<'cfg> for I {
-    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_, '_>, method: &InferenceMethod<'cfg>) {
-        let mut rules = self.define_rules().into_rules();
-        inferrer.use_rule(&mut rules, method);
+    fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>) {
+        inferrer.use_method(
+            self.with_tags(define_tags()),
+            self.with_methods(define_methods()),
+        );
     }
 }
 
 pub trait IntoInferenceMethod<'cfg, M = Self> {
-    fn into_inference_method(self) -> InferenceMethod<'cfg>
-    where
-        Self: 'cfg;
+    fn into_inference_method(self) -> InferenceMethod<'cfg>;
 }
 
 impl<'cfg> IntoInferenceMethod<'cfg> for InferenceMethod<'cfg> {
-    fn into_inference_method(self) -> InferenceMethod<'cfg>
-    where
-        Self: 'cfg,
-    {
+    fn into_inference_method(self) -> InferenceMethod<'cfg> {
         self
     }
 }
 
-impl<'cfg, T: Infer<'cfg>> IntoInferenceMethod<'cfg> for Rc<T> {
-    fn into_inference_method(self) -> InferenceMethod<'cfg>
-    where
-        Self: 'cfg,
-    {
+impl<'cfg, T: Infer<'cfg> + 'cfg> IntoInferenceMethod<'cfg> for Rc<T> {
+    fn into_inference_method(self) -> InferenceMethod<'cfg> {
         InferenceMethod {
             inner: InferenceMethodInner::Rc(self),
         }
     }
 }
 
-impl<'cfg, T: Infer<'cfg>> IntoInferenceMethod<'cfg, (T,)> for T {
-    fn into_inference_method(self) -> InferenceMethod<'cfg>
-    where
-        Self: 'cfg,
-    {
+impl<'cfg, T: Infer<'cfg> + 'cfg> IntoInferenceMethod<'cfg, (T,)> for T {
+    fn into_inference_method(self) -> InferenceMethod<'cfg> {
         InferenceMethod {
             inner: InferenceMethodInner::Rc(Rc::new(self)),
         }
@@ -80,25 +262,49 @@ impl<'cfg, T: Infer<'cfg>> IntoInferenceMethod<'cfg> for &'cfg T {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 enum InferenceMethodInner<'cfg> {
-    #[default]
-    Inherit,
     Rc(Rc<dyn DynInfer<'cfg> + 'cfg>),
     Ref(&'cfg (dyn DynInfer<'cfg> + 'cfg)),
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct InferenceMethod<'cfg> {
     inner: InferenceMethodInner<'cfg>,
 }
 
+impl<'cfg, I: Infer<'cfg>> From<&'cfg I> for InferenceMethod<'cfg> {
+    fn from(value: &'cfg I) -> Self {
+        InferenceMethod {
+            inner: InferenceMethodInner::Ref(value),
+        }
+    }
+}
+
+impl<'cfg> Default for InferenceMethod<'cfg> {
+    fn default() -> Self {
+        Self {
+            inner: InferenceMethodInner::Ref(&StandardInfer {}),
+        }
+    }
+}
+
+impl<'cfg> Default for &InferenceMethod<'cfg> {
+    fn default() -> Self {
+        &InferenceMethod {
+            inner: InferenceMethodInner::Ref(&StandardInfer {}),
+        }
+    }
+}
+
 impl<'cfg> InferenceMethod<'cfg> {
-    fn get_inner(&self) -> Option<&dyn DynInfer<'cfg>> {
+    fn new<M>(value: impl IntoInferenceMethod<'cfg, M> + 'cfg) -> Self {
+        value.into_inference_method()
+    }
+    fn get_inner(&self) -> &dyn DynInfer<'cfg> {
         match self.inner {
-            InferenceMethodInner::Inherit => None,
-            InferenceMethodInner::Rc(ref inner) => Some(&**inner),
-            InferenceMethodInner::Ref(inner) => Some(inner),
+            InferenceMethodInner::Rc(ref inner) => &**inner,
+            InferenceMethodInner::Ref(inner) => inner,
         }
     }
 }
@@ -119,39 +325,40 @@ pub struct InferenceTarget<'cfg, 'infer> {
     needs_inference: bool,
 }
 
-pub trait IntoTags<'cfg, M = ()> {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>>;
+pub trait IntoTags<'cfg, M = (), _Bound = &'cfg Self>: 'cfg {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg;
 }
 
-impl<'cfg, It: IntoIterator, M> IntoTags<'cfg, [M; 1]> for It
+impl<'cfg, It: IntoIterator + 'cfg, M> IntoTags<'cfg, &'cfg [M]> for It
 where
     It::Item: IntoTags<'cfg, M>,
+    It::IntoIter: Clone + 'cfg,
 {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
         self.into_iter().flat_map(IntoTags::tags)
     }
 }
 
 impl<'cfg> IntoTags<'cfg> for TextSlice<'cfg> {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
         core::iter::once(self)
     }
 }
 
 impl<'cfg> IntoTags<'cfg> for Cow<'cfg, str> {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
         core::iter::once(self.into())
     }
 }
 
 impl<'cfg> IntoTags<'cfg> for String {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
         core::iter::once(self.into())
     }
 }
 
 impl<'cfg> IntoTags<'cfg> for &'cfg str {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> {
+    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
         core::iter::once(self.into())
     }
 }
@@ -161,7 +368,6 @@ pub struct InferencePredicateContext<'cfg, 'infer> {
     nodes: &'infer [Node<'cfg>],
     parent: Option<&'infer InferencePredicateContext<'cfg, 'infer>>,
     index: usize,
-    child_inference: &'infer Cell<Option<ChildInference<'cfg>>>,
 }
 
 impl<'cfg, 'infer> InferencePredicateContext<'cfg, 'infer> {
@@ -190,18 +396,6 @@ impl<'cfg, 'infer> InferencePredicateContext<'cfg, 'infer> {
             _ => Ok(None),
         })
     }
-
-    fn set_child_inference(&self, f: impl FnOnce() -> ChildInference<'cfg>) -> bool {
-        let old = self.child_inference.take();
-
-        if old.is_some() {
-            self.child_inference.set(old);
-            return false;
-        }
-
-        self.child_inference.set(Some(f()));
-        true
-    }
 }
 
 #[derive(Default, Clone, Copy, Add)]
@@ -228,6 +422,32 @@ pub trait InferencePredicate {
     fn direction_precedence(&self) -> DirectionPrecedence {
         default()
     }
+}
+fn apply_tags<'cfg>(element: &mut Element<'cfg>, tags: impl IntoIterator<Item = TextSlice<'cfg>>) {
+    let mut tags = tags.into_iter().filter(|t| !t.is_empty());
+    let Some(first) = tags.next() else {
+        if element.selectors.is_empty() {
+            element.selectors.remove(0);
+        }
+        return;
+    };
+
+    let selector_location;
+
+    if let Some(selector) = element.selectors.first_mut() {
+        selector_location = selector.range.end;
+        selector.tag = first.into();
+    } else {
+        selector_location = element.range.start;
+        element
+            .selectors
+            .push(Selector::empty(selector_location).with_tag(first))
+    }
+
+    element.selectors.splice(
+        1..1,
+        tags.map(|t| Selector::empty(selector_location).with_tag(t)),
+    );
 }
 
 impl<'cfg, 'infer> InferenceTarget<'cfg, 'infer> {
@@ -286,64 +506,66 @@ impl<'cfg, 'infer> InferenceTarget<'cfg, 'infer> {
 pub struct Incomplete {}
 type TestResult<T = bool> = Result<T, Incomplete>;
 
-struct InferenceState<'cfg> {
-    result: Result<Option<usize>, usize>,
-    child_inference: Option<ChildInference<'cfg>>,
+struct InferenceState {
+    result: Result<(), usize>,
 }
 
-struct Inferrer<'cfg, 'infer, 'base> {
+struct Inferrer<'cfg, 'infer> {
     src: &'cfg str,
     nodes: &'infer mut [Node<'cfg>],
     parent_context: Option<&'infer InferencePredicateContext<'cfg, 'infer>>,
-    states: &'infer mut Vec<InferenceState<'cfg>>,
-    base_rule: &'base mut (dyn InferenceRule<'cfg>),
-    base_inference_method: &'base InferenceMethod<'cfg>,
+    states: &'infer mut Vec<InferenceState>,
 }
 
-fn fallback_rule<'cfg>(
-    rule: impl InferenceRule<'cfg>,
-    base: impl InferenceRule<'cfg>,
-) -> impl InferenceRule<'cfg> {
-    rules().add(rule).add(base)
-}
-
-impl<'cfg, 'infer, 'base> Inferrer<'cfg, 'infer, 'base> {
-    fn test_node<'this>(&mut self, rule: &mut impl InferenceRule<'cfg>, index: usize) -> bool
-    where
-        'this: 'base,
-    {
+impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
+    fn infer_tag_node(&mut self, define_tags: &mut impl TagDefinition<'cfg>, index: usize) -> bool {
         let InferenceState {
-            result: Err(max_depth),
-            ref mut child_inference,
+            result: Err(start_index),
         } = self.states[index]
         else {
             // already resolved
             return false;
         };
 
-        if !matches!(self.nodes[index].node_type, NodeType::Element { .. }) {
-            self.states[index].result = Ok(None);
-            return true;
+        {
+            // Skip if this element already has a tag
+            let tag = self.nodes[index]
+                .as_element()
+                .and_then(|e| e.selectors.first())
+                .and_then(|s| s.tag.name());
+
+            if tag.is_some() {
+                self.states[index].result = Ok(());
+                return true;
+            };
         }
 
-        let result = fallback_rule(rule, &mut *self.base_rule).test_rule(
-            0,
-            max_depth,
+        let result = match define_tags.test(
             &InferencePredicateContext {
                 src: self.src,
                 nodes: &*self.nodes,
                 parent: self.parent_context,
                 index,
-                child_inference: Cell::from_mut(child_inference),
             },
-        );
+            0,
+            start_index,
+        ) {
+            Ok(Some(tag_fn)) => {
+                if let Some(element) = self.nodes[index].as_element_mut() {
+                    tag_fn(element);
+                }
+                Ok(())
+            }
+            Ok(None) => Ok(()),
+            Err(i) => Err(i),
+        };
 
         self.states[index].result = result;
         result.is_ok()
     }
 
-    fn test_nodes(&mut self, rule: &mut impl InferenceRule<'cfg>) {
-        let mut reverse = rule.direction_precedence().should_reverse();
+    fn infer_tag_nodes(&mut self, mut define_tags: impl TagDefinition<'cfg>) {
+        let mut reverse = define_tags.direction_precedence().should_reverse();
         let mut total_resolved = 0;
 
         loop {
@@ -352,7 +574,7 @@ impl<'cfg, 'infer, 'base> Inferrer<'cfg, 'infer, 'base> {
             let resolved_count = indices
                 .into_either_with(|_| reverse)
                 .map_left(Iterator::rev)
-                .map(|i| self.test_node(rule, i) as usize)
+                .map(|i| self.infer_tag_node(&mut define_tags, i) as usize)
                 .sum::<usize>();
 
             total_resolved += resolved_count;
@@ -366,133 +588,58 @@ impl<'cfg, 'infer, 'base> Inferrer<'cfg, 'infer, 'base> {
         }
     }
 
-    fn apply_rule_to_nodes(&mut self, rule: &mut impl InferenceRule<'cfg>) {
-        for i in 0..self.nodes.len() {
-            let (
-                &mut InferenceState {
-                    result: Ok(Some(depth)),
-                    ref mut child_inference,
-                },
-                &mut Node {
-                    node_type:
-                        NodeType::Element {
-                            value: ref mut element,
-                            ..
-                        },
-                    ..
-                },
-            ) = (&mut self.states[i], &mut self.nodes[i])
-            else {
-                continue;
-            };
-
-            let mut child_inference = child_inference.take().unwrap_or(ChildInference::Revert);
-            let needs_inference = element
-                .selectors
-                .first()
-                .map(|s| s.uninferred())
-                .unwrap_or(true);
-
-            let mut inference_target = InferenceTarget {
-                src: self.src,
-                element,
-                needs_inference,
-                child_inference: &mut child_inference,
-            };
-
-            fallback_rule(&mut *rule, &mut *self.base_rule).apply_rule(
-                0,
-                depth,
-                &mut inference_target,
-            );
-
-            element.inference_method = child_inference;
-        }
-    }
-
-    pub fn use_rule(
+    pub fn use_method(
         &mut self,
-        rule: &mut impl InferenceRule<'cfg>,
-        method: &InferenceMethod<'cfg>,
+        define_tags: impl TagDefinition<'cfg>,
+        mut define_methods: impl MethodDefinition<'cfg>,
     ) {
         self.states
-            .resize_with(self.nodes.len(), || InferenceState {
-                result: Err(usize::MAX),
-                child_inference: default(),
-            });
+            .resize_with(self.nodes.len(), || InferenceState { result: Err(0) });
 
-        self.test_nodes(rule);
-        self.apply_rule_to_nodes(rule);
+        self.infer_tag_nodes(define_tags);
         self.states.clear();
 
         for i in 0..self.nodes.len() {
-            self.inference_level(rule, method, i);
+            self.inference_level(&mut define_methods, i);
         }
     }
 
-    fn inference_level(
-        &mut self,
-        rule: &mut impl InferenceRule<'cfg>,
-        parent_method: &InferenceMethod<'cfg>,
-        index: usize,
-    ) {
-        let child_inference;
+    fn inference_level(&mut self, define_methods: &mut impl MethodDefinition<'cfg>, index: usize) {
         let mut nodes = {
             let Some(element) = self.nodes[index].as_element_mut() else {
                 return;
             };
-            child_inference = mem::take(&mut element.inference_method);
             element.split_uninferred();
             mem::take(&mut element.content.nodes)
         };
 
-        {
-            let mut continue_inference = false;
-
-            let method = match child_inference {
-                ChildInference::Revert => self.base_inference_method,
-                ChildInference::Continue => {
-                    continue_inference = true;
-                    parent_method
+        let predicate_context = InferencePredicateContext {
+            src: self.src,
+            nodes: &*self.nodes,
+            parent: self.parent_context,
+            index,
+        };
+        let method = {
+            let mut index = 0;
+            loop {
+                match define_methods.test(&predicate_context, 0, index) {
+                    Ok(method) => break method,
+                    Err(i) => {
+                        index = i + 1;
+                    }
                 }
-                ChildInference::WithMethod(ref m) => m,
-            };
+            }
+        }
+        .map(|m| &*m)
+        .unwrap_or_default();
 
-            let dyn_infer = method
-                .get_inner()
-                .or_else(|| self.base_inference_method.get_inner())
-                .unwrap_or(&StandardInfer {});
-
-            let mut base_rule = if continue_inference {
-                Either::Left(fallback_rule(rule, &mut *self.base_rule))
-            } else {
-                Either::Right(&mut *self.base_rule)
-            };
-
-            dyn_infer.infer(
-                &mut Inferrer {
-                    src: self.src,
-                    nodes: &mut nodes,
-                    parent_context: Some(&InferencePredicateContext {
-                        src: self.src,
-                        nodes: &*self.nodes,
-                        parent: self.parent_context,
-                        index,
-                        child_inference: &default(),
-                    }),
-                    states: self.states,
-                    base_rule: match base_rule {
-                        Either::Left(ref mut rule) => rule,
-                        Either::Right(rule) => rule,
-                    },
-                    base_inference_method: if continue_inference {
-                        parent_method
-                    } else {
-                        self.base_inference_method
-                    },
-                },
-                method,
-            )
+        {
+            method.get_inner().infer(&mut Inferrer {
+                src: self.src,
+                nodes: &mut nodes,
+                parent_context: Some(&predicate_context),
+                states: self.states,
+            });
         }
 
         {
@@ -505,16 +652,10 @@ impl<'cfg, 'infer, 'base> Inferrer<'cfg, 'infer, 'base> {
 }
 
 pub fn infer<'cfg>(src: &'cfg str, content: &mut Content<'cfg>) {
-    let method = (&StandardInfer {}).into_inference_method();
-    StandardInfer {}.infer(
-        &mut Inferrer {
-            src,
-            nodes: &mut content.nodes,
-            parent_context: None,
-            states: &mut default(),
-            base_rule: &mut StandardInfer {}.define_rules().into_rules(),
-            base_inference_method: &method,
-        },
-        &method,
-    );
+    StandardInfer {}.infer(&mut Inferrer {
+        src,
+        nodes: &mut content.nodes,
+        parent_context: None,
+        states: &mut default(),
+    });
 }

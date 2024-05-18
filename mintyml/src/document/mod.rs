@@ -181,7 +181,6 @@ impl<'cfg> BuildContext<'cfg> {
         let mut out_nodes = Vec::<Node<'cfg>>::new();
         let mut node_buf = Vec::new();
         let range = LocationRange { start, end };
-        let mut consecutive_line = false;
         let mut last_line_end = start;
 
         for &ast::Line {
@@ -191,86 +190,113 @@ impl<'cfg> BuildContext<'cfg> {
         } in lines
         {
             if nodes.is_empty() {
-                if consecutive_line {
-                    out_nodes.push(Node {
-                        range: LocationRange { start, end },
-                        node_type: NodeType::TextLike {
-                            value: TextLike::Space {
-                                value: Space::ParagraphEnd {},
-                            },
-                        },
-                    });
-                }
-                consecutive_line = false;
+                out_nodes.push(self.paragraph_end(last_line_end, end)?);
             } else {
-                node_buf = self.build_line(&mut &nodes[..], node_buf)?;
-                let mut appended = false;
+                let mut nodes = &nodes[..];
+                node_buf = self.build_line(&mut nodes, node_buf)?;
 
-                let first_visible = node_buf.iter().find(|n| n.is_visible());
-                let starts_with_element = first_visible
-                    .and_then(Node::as_element)
-                    .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
-                    .unwrap_or(false);
-
-                // Determine if this line should be added to the last element:
-                if consecutive_line && !starts_with_element {
-                    if let Some((last_node_range, last_element)) = out_nodes
-                        .iter_mut()
-                        .rfind(|n| n.is_visible())
-                        .and_then(|n| match n.node_type {
-                            NodeType::Element { ref mut value } => Some((&mut n.range, value)),
-                            _ => None,
-                        })
-                        .filter(|(_, e)| {
-                            matches!(
-                                e.element_type,
-                                ElementType::Standard {
-                                    delimiter: ElementDelimiter::Line { .. },
-                                } | ElementType::Paragraph { .. }
-                            )
-                        })
-                    {
-                        appended = true;
-                        let line_end_range = LocationRange {
-                            start: last_line_end,
-                            end: start,
-                        };
-                        last_element.content.nodes.push(Node {
-                            range: line_end_range,
-                            node_type: NodeType::TextLike {
-                                value: Space::LineEnd {}.into(),
-                            },
-                        });
-                        last_element.content.nodes.extend(node_buf.drain(..));
-                        last_element.range.end = end;
-                        last_node_range.end = end;
-                    }
-                }
-                consecutive_line = true;
-                last_line_end = end;
-                if !appended {
-                    if starts_with_element {
-                        out_nodes.extend(node_buf.drain(..))
-                    } else {
-                        out_nodes.push(
-                            Element {
-                                content: Content {
-                                    range,
-                                    nodes: node_buf.drain(..).collect(),
-                                },
-                                ..Element::new(range, ElementType::Paragraph {})
-                            }
-                            .into(),
-                        )
-                    }
-                }
+                self.add_line(
+                    &mut out_nodes,
+                    &mut node_buf,
+                    LocationRange { start, end },
+                    last_line_end,
+                )?;
             }
+            last_line_end = end;
         }
 
         Ok(Content {
             range,
             nodes: out_nodes,
         })
+    }
+
+    fn append_to_previous_node_if_applicable(
+        &mut self,
+        out_nodes: &mut Vec<Node<'cfg>>,
+        line: &mut Vec<Node<'cfg>>,
+        range: LocationRange,
+        last_line_end: Location,
+    ) -> BuildResult {
+        // IF the following conditions are met:
+
+        // - The last node exists
+        let Some(last_node) = out_nodes.last_mut() else {
+            return Ok(());
+        };
+
+        // - The last node is an element
+        let NodeType::Element {
+            value: ref mut last_element,
+        } = last_node.node_type
+        else {
+            return Ok(());
+        };
+
+        // - The last node is either a line element or a paragraph
+        let (ElementType::Standard {
+            delimiter: ElementDelimiter::Line { .. },
+        }
+        | ElementType::Paragraph { .. }) = last_element.element_type
+        else {
+            return Ok(());
+        };
+
+        // THEN add all the nodes in the current line to the previous node, preceded by a LineEnd node:
+
+        let line_end = self.line_end(last_line_end, range.start)?;
+
+        last_element
+            .content
+            .nodes
+            .extend([line_end].into_iter().chain(line.drain(..)));
+
+        // Make sure we update the ranges for the previous node to include the current line:
+        last_element.range.end = range.end;
+        last_node.range.end = range.end;
+
+        Ok(())
+    }
+
+    fn add_line(
+        &mut self,
+        out_nodes: &mut Vec<Node<'cfg>>,
+        line: &mut Vec<Node<'cfg>>,
+        range: LocationRange,
+        last_line_end: Location,
+    ) -> BuildResult {
+        let first_visible = line.iter().find(|n| n.is_visible());
+        let starts_with_element = first_visible
+            .and_then(Node::as_element)
+            .map(|e| matches!(e.element_type, ElementType::Standard { .. }))
+            .unwrap_or(false);
+
+        if !starts_with_element {
+            self.append_to_previous_node_if_applicable(out_nodes, line, range, last_line_end)?;
+        }
+
+        if !line.is_empty() {
+            let do_previous_nodes_exist = out_nodes.iter().any(Node::is_visible);
+
+            if do_previous_nodes_exist {
+                out_nodes.push(self.paragraph_end(last_line_end, range.start)?);
+            }
+
+            if starts_with_element {
+                out_nodes.extend(line.drain(..))
+            } else {
+                let paragraph = Element {
+                    content: Content {
+                        range,
+                        nodes: line.drain(..).collect(),
+                    },
+                    ..Element::new(range, ElementType::Paragraph {})
+                };
+                out_nodes.push(paragraph.into())
+            }
+        }
+
+        Ok(())
     }
 
     /// Called when a child combinator has just been read
@@ -455,6 +481,7 @@ impl<'cfg> BuildContext<'cfg> {
         *nodes = old_nodes;
         Ok(())
     }
+
     fn extend_line(
         &mut self,
         nodes: &mut &[(Option<ast::Space>, ast::Node)],

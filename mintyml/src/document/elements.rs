@@ -5,7 +5,7 @@ use alloc::{vec, vec::Vec};
 use derive_more::Display;
 use gramma::parse::LocationRange;
 
-use crate::{ast, error::UnclosedDelimiterKind, inference::engine::ChildInference, utils::default};
+use crate::{ast, error::UnclosedDelimiterKind, utils::default};
 
 use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector};
 
@@ -54,7 +54,6 @@ pub struct Element<'cfg> {
     pub selectors: Vec<Selector<'cfg>>,
     pub content: Content<'cfg>,
     pub element_type: ElementType,
-    pub(crate) inference_method: ChildInference<'cfg>,
     pub(super) format_inline: bool,
     pub(super) is_raw: bool,
 }
@@ -62,14 +61,13 @@ pub struct Element<'cfg> {
 impl<'cfg> Element<'cfg> {
     pub fn new(range: LocationRange, element_type: impl Into<ElementType>) -> Self {
         Self {
-            range,
+            range,  
             element_type: element_type.into(),
             selectors: Vec::new(),
             content: Content {
                 range,
                 nodes: default(),
             },
-            inference_method: ChildInference::default(),
             format_inline: false,
             is_raw: false,
         }
@@ -98,7 +96,6 @@ impl<'cfg> Element<'cfg> {
                     nodes: mem::take(&mut self.content.nodes),
                 },
                 element_type: self.element_type.clone(),
-                inference_method: ChildInference::default(),
                 format_inline: self.format_inline,
                 is_raw: self.is_raw,
             };

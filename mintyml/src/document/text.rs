@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, string::String};
-use gramma::parse::LocationRange;
+use gramma::parse::{Location, LocationRange};
 
 use crate::{ast, utils::default};
 
@@ -48,6 +48,14 @@ impl<'cfg> From<String> for TextSlice<'_> {
 impl From<LocationRange> for TextSlice<'_> {
     fn from(range: LocationRange) -> Self {
         Self::FromSource { range }
+    }
+}
+
+impl<'cfg> From<Space<'cfg>> for NodeType<'cfg> {
+    fn from(value: Space<'cfg>) -> Self {
+        NodeType::TextLike {
+            value: TextLike::Space { value },
+        }
     }
 }
 
@@ -181,19 +189,16 @@ impl<'cfg> BuildContext<'cfg> {
     }
 
     pub fn build_inline_text(&mut self, text: &ast::InlineText) -> BuildResult<Node<'cfg>> {
-        Ok(match text {
+        match text {
             ast::InlineText::Segment { value } => {
-                self.build_text_node(value.range, true, true, false, false)?
+                self.build_text_node(value.range, true, true, false, false)
             }
-            ast::InlineText::Verbatim { value } => self.build_verbatim_node(value)?,
-            ast::InlineText::Comment { comment } => {
-                let _ = comment;
-                todo!()
-            }
+            ast::InlineText::Verbatim { value } => self.build_verbatim_node(value),
+            ast::InlineText::Comment { comment } => self.build_comment_node(comment),
             ast::InlineText::Interpolation { interpolation } => {
-                self.build_text_node(interpolation.range, false, false, true, false)?
+                self.build_text_node(interpolation.range, false, false, true, false)
             }
-        })
+        }
     }
 
     pub fn build_comment_node(
@@ -234,6 +239,34 @@ impl<'cfg> BuildContext<'cfg> {
                     },
                 },
             },
+        })
+    }
+
+    pub fn line_end(
+        &mut self,
+        prev_end: Location,
+        next_start: Location,
+    ) -> BuildResult<Node<'cfg>> {
+        Ok(Node {
+            range: LocationRange {
+                start: prev_end,
+                end: next_start,
+            },
+            node_type: Space::LineEnd {}.into(),
+        })
+    }
+
+    pub fn paragraph_end(
+        &mut self,
+        prev_end: Location,
+        next_start: Location,
+    ) -> BuildResult<Node<'cfg>> {
+        Ok(Node {
+            range: LocationRange {
+                start: prev_end,
+                end: next_start,
+            },
+            node_type: Space::ParagraphEnd {}.into(),
         })
     }
 
