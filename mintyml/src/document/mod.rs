@@ -38,7 +38,7 @@ impl<'cfg> Node<'cfg> {
             NodeType::Element { ref value } => match value.element_type {
                 ElementType::Paragraph {} => ItemType::Paragraph {},
                 ElementType::Standard { .. } => ItemType::Element {},
-                ElementType::Inline {} => ItemType::InlineElement {},
+                ElementType::Inline { .. } => ItemType::InlineElement {},
                 ElementType::Special {
                     kind: SpecialKind::CodeBlockContainer,
                 } => todo!(),
@@ -531,7 +531,7 @@ impl<'cfg> BuildContext<'cfg> {
                     );
                 }
                 ast::NodeType::Element { element } => {
-                    out_nodes.push(self.build_element(node_range, element)?.into());
+                    self.build_element(node_range, element, out_nodes)?;
                 }
             }
         }

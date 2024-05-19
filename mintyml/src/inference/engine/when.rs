@@ -92,12 +92,19 @@ pub fn paragraph() -> InferWhen<impl InferencePredicate> {
     element_where(|e| matches!(e.element_type, ElementType::Paragraph {}))
 }
 
+pub fn inline() -> InferWhen<impl InferencePredicate> {
+    element_where(|e| matches!(e.element_type, ElementType::Inline { .. },))
+}
+
 pub fn line() -> InferWhen<impl InferencePredicate> {
     element_where(|e| {
         matches!(
             e.element_type,
             ElementType::Standard {
                 delimiter: ElementDelimiter::Line { .. } | ElementDelimiter::LineBlock { .. }
+            } | ElementType::Inline {
+                delimiter: Some(ElementDelimiter::Line { .. } | ElementDelimiter::LineBlock { .. })
+                    | None
             }
         )
     })

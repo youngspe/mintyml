@@ -10,7 +10,7 @@ use crate::{ast, error::UnclosedDelimiterKind, utils::default};
 use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector};
 
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ElementDelimiter {
     #[non_exhaustive]
     Line { combinator: LocationRange },
@@ -31,7 +31,7 @@ pub enum ElementType {
     #[non_exhaustive]
     Standard { delimiter: ElementDelimiter },
     #[non_exhaustive]
-    Inline {},
+    Inline { delimiter: Option<ElementDelimiter> },
     #[non_exhaustive]
     Special { kind: SpecialKind },
 }
@@ -61,7 +61,7 @@ pub struct Element<'cfg> {
 impl<'cfg> Element<'cfg> {
     pub fn new(range: LocationRange, element_type: impl Into<ElementType>) -> Self {
         Self {
-            range,  
+            range,
             element_type: element_type.into(),
             selectors: Vec::new(),
             content: Content {
@@ -204,14 +204,49 @@ impl<'cfg> BuildContext<'cfg> {
         &mut self,
         range: LocationRange,
         ast::Inline { open, inner, close }: &ast::Inline,
-    ) -> BuildResult<Element<'cfg>> {
+        out_nodes: &mut Vec<Node<'cfg>>,
+    ) -> BuildResult {
+        let inner_range = LocationRange {
+            start: open.range.end,
+            end: close.as_ref().map(|c| c.range.start).unwrap_or(range.end),
+        };
         if close.is_none() {
             self.unclosed(open.range, UnclosedDelimiterKind::Inline {})?;
         }
-        Ok(Element {
-            content: self.build_content(inner)?,
-            ..Element::new(range, ElementType::Inline {})
-        })
+
+        let mut line = self.build_line(&mut &inner[..], default())?;
+        self.validate_line(&mut line)?;
+
+        let first_visible_node = line.iter_mut().find(|n| n.is_visible());
+
+        if let Some(node) = first_visible_node {
+            if let Some(element) = node.as_element_mut() {
+                if let ElementType::Standard { delimiter } = element.element_type {
+                    element.element_type = ElementType::Inline {
+                        delimiter: Some(delimiter),
+                    };
+
+                    element.range = range;
+                    node.range = range;
+                    out_nodes.extend(line);
+
+                    return Ok(());
+                }
+            }
+        }
+
+        out_nodes.push(
+            Element {
+                content: Content {
+                    range: inner_range,
+                    nodes: line,
+                },
+                ..Element::new(range, ElementType::Inline { delimiter: None })
+            }
+            .into(),
+        );
+
+        Ok(())
     }
 
     pub fn build_block(
@@ -236,25 +271,31 @@ impl<'cfg> BuildContext<'cfg> {
         &mut self,
         range: LocationRange,
         ast: &ast::Element,
-    ) -> BuildResult<Element<'cfg>> {
+        out_nodes: &mut Vec<Node<'cfg>>,
+    ) -> BuildResult {
         Ok(match ast {
-            &ast::Element::Line { combinator } => Element {
-                content: Content {
-                    range: LocationRange {
-                        start: range.end,
-                        ..range
+            &ast::Element::Line { combinator } => out_nodes.push(
+                Element {
+                    content: Content {
+                        range: LocationRange {
+                            start: range.end,
+                            ..range
+                        },
+                        nodes: default(),
                     },
-                    nodes: default(),
-                },
-                ..Element::new(range, ElementDelimiter::Line { combinator })
-            },
-            ast::Element::Block { value } => self.build_block(range, value)?,
+                    ..Element::new(range, ElementDelimiter::Line { combinator })
+                }
+                .into(),
+            ),
+            ast::Element::Block { value } => out_nodes.push(self.build_block(range, value)?.into()),
             ast::Element::MultilineCode { value } => {
                 let _ = value;
                 todo!()
             }
-            ast::Element::Inline { value } => self.build_inline(range, value)?,
-            ast::Element::InlineSpecial { value } => self.build_inline_special(range, value)?,
+            ast::Element::Inline { value } => self.build_inline(range, value, out_nodes)?,
+            ast::Element::InlineSpecial { value } => {
+                out_nodes.push(self.build_inline_special(range, value)?.into())
+            }
         })
     }
 }

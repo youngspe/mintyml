@@ -240,7 +240,7 @@ section {
     fn empty_line() {
         let src = "";
         let line = gramma::parse_tree::<Line, LOOKAHEAD>(src).unwrap();
-        // assert!(matches!(line, Line::EmptyLine { .. }));
+        assert_eq!(line.nodes.len(), 0);
     }
 
     #[test]
@@ -249,7 +249,7 @@ section {
         let line = gramma::parse_tree::<(LeftBrace, Line, RightBrace), 2>(src)
             .unwrap()
             .1;
-        // assert!(matches!(line, Line::NonEmptyLine { .. }));
+        assert_eq!(line.nodes.len(), 1);
     }
 
     #[test]
@@ -259,7 +259,7 @@ section {
 
     foo
 }";
-        let line = parse_as_vec::<Node>(src);
+        parse_as_vec::<Node>(src);
     }
 
     #[track_caller]

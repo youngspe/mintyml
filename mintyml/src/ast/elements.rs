@@ -1,6 +1,8 @@
+use alloc::vec::Vec;
+
 use gramma::parse::LocationRange;
 
-use super::{tokens::*, Content};
+use super::{tokens::*, Content, Node};
 
 gramma::define_token!(
     #[pattern(exact = "</")]
@@ -53,7 +55,7 @@ gramma::define_rule!(
     pub struct Inline {
         pub open: OpenInline,
         #[transform(ignore_around<Whitespace>)]
-        pub inner: Content,
+        pub inner: Vec<(Option<Space>, Node)>,
         pub close: Option<CloseInline>,
     }
 

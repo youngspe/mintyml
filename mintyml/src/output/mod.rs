@@ -413,7 +413,7 @@ where
             {
                 let tag = this.slice(tag);
                 let tag_info = this.get_info(tag);
-                if !this.is_xml() && !tag_info.is_void {
+                if !self_close_last && !tag_info.is_void {
                     this.write_close_tag(tag)?;
                 }
             }
