@@ -33,32 +33,27 @@ mod sealed {
 use sealed::InferTest;
 
 pub trait InferenceDefinition<'cfg, T: ?Sized>: InferTest<'cfg, T> {
-    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T>
+    type Append<Next: InferenceDefinition<'cfg, T>>: InferenceDefinition<'cfg, T>;
+    fn append<Next: InferenceDefinition<'cfg, T>>(self, other: Next) -> Self::Append<Next>
     where
         Self: Sized;
 }
 
 struct TagFn<F>(F);
 
-fn tag_fn<'cfg>(
-    f: impl FnMut(&mut Element<'cfg>) + 'cfg,
-) -> TagFn<impl FnMut(&mut Element<'cfg>) + 'cfg> {
-    TagFn(f)
-}
-
 impl<'cfg, F: FnMut(&mut Element<'cfg>) + 'cfg> Borrow<TagDefinitionItem<'cfg>> for TagFn<F> {
-    fn borrow(&self) -> &(TagDefinitionItem<'cfg>) {
+    fn borrow(&self) -> &TagDefinitionItem<'cfg> {
         &self.0
     }
 }
 
 impl<'cfg, F: FnMut(&mut Element<'cfg>) + 'cfg> BorrowMut<TagDefinitionItem<'cfg>> for TagFn<F> {
-    fn borrow_mut(&mut self) -> &mut (TagDefinitionItem<'cfg>) {
+    fn borrow_mut(&mut self) -> &mut TagDefinitionItem<'cfg> {
         &mut self.0
     }
 }
 
-struct InferenceDefinitionPair<Pred, Next, T> {
+pub struct InferenceDefinitionPair<Pred, Next, T> {
     pred: Pred,
     value: T,
     next: Next,
@@ -69,10 +64,10 @@ type TagDefinitionItem<'cfg> = dyn FnMut(&mut Element<'cfg>) + 'cfg;
 pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
     'cfg + InferenceDefinition<'cfg, TagDefinitionItem<'cfg>> + Sized
 {
-    fn apply(self, other: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
+    fn apply<Next: TagDefinition<'cfg>>(self, other: Next) -> Self::Append<Next> {
         self.append(other)
     }
-    fn apply_from(self, other: &impl Infer<'cfg>) -> impl TagDefinition<'cfg> {
+    fn apply_from(self, other: &impl Infer<'cfg>) -> Self::Append<impl TagDefinition<'cfg>> {
         self.apply(other.define_tags())
     }
 
@@ -80,42 +75,42 @@ pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
         self,
         pred: impl InferencePredicate,
         value: impl IntoTags<'cfg, M>,
-    ) -> impl TagDefinition<'cfg> {
+    ) -> Self::Append<impl TagDefinition<'cfg>> {
         let tags = value.tags();
         self.append(InferenceDefinitionPair {
             pred,
-            value: tag_fn::<'cfg>(move |element: &mut Element<'cfg>| {
-                apply_tags(element, tags.clone())
-            }),
-            next: define_tags(),
+            value: TagFn(move |element: &mut Element<'cfg>| apply_tags(element, tags.clone())),
+            next: EmptyInferenceDefinition {},
         })
     }
-    fn default<M>(self, value: impl IntoTags<'cfg, M>) -> impl TagDefinition<'cfg> {
+    fn default<M>(self, value: impl IntoTags<'cfg, M>) -> Self::Append<impl TagDefinition<'cfg>> {
         self.when(when::any(), value)
     }
 }
 pub trait MethodDefinition<'cfg, _Bound = &'cfg Self>:
     'cfg + InferenceDefinition<'cfg, InferenceMethod<'cfg>> + Sized
 {
-    fn apply(self, other: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
+    fn apply<Next: MethodDefinition<'cfg>>(self, other: Next) -> Self::Append<Next> {
         self.append(other)
     }
 
-    fn apply_from(self, other: &impl Infer<'cfg>) -> impl MethodDefinition<'cfg> {
+    fn apply_from(self, other: &impl Infer<'cfg>) -> Self::Append<impl MethodDefinition<'cfg>> {
         self.apply(other.define_methods())
     }
 
-    fn when<M>(
+    fn when<Pred: InferencePredicate, M>(
         self,
-        pred: impl InferencePredicate,
+        pred: Pred,
         value: impl IntoInferenceMethod<'cfg, M>,
-    ) -> impl MethodDefinition<'cfg> {
+    ) -> Self::Append<InferenceDefinitionPair<Pred, EmptyInferenceDefinition, InferenceMethod<'cfg>>>
+    {
         self.append(InferenceDefinitionPair {
             pred,
             value: value.into_inference_method(),
-            next: EmptyInferenceDefinition,
+            next: EmptyInferenceDefinition {},
         })
     }
+
     fn default<M>(self, value: impl IntoInferenceMethod<'cfg, M>) -> impl MethodDefinition<'cfg> {
         self.when(when::any(), value)
     }
@@ -125,14 +120,15 @@ impl<'cfg, D> TagDefinition<'cfg> for D where D: InferenceDefinition<'cfg, TagDe
 
 impl<'cfg, D> MethodDefinition<'cfg> for D where D: InferenceDefinition<'cfg, InferenceMethod<'cfg>> {}
 
-struct EmptyInferenceDefinition;
+#[non_exhaustive]
+pub struct EmptyInferenceDefinition {}
 
 pub fn define_tags<'cfg>() -> impl TagDefinition<'cfg> {
-    EmptyInferenceDefinition
+    EmptyInferenceDefinition {}
 }
 
 pub fn define_methods<'cfg>() -> impl MethodDefinition<'cfg> {
-    EmptyInferenceDefinition
+    EmptyInferenceDefinition {}
 }
 
 impl<'cfg, T: ?Sized> InferTest<'cfg, T> for EmptyInferenceDefinition {
@@ -151,7 +147,8 @@ impl<'cfg, T: ?Sized> InferTest<'cfg, T> for EmptyInferenceDefinition {
 }
 
 impl<'cfg, T: ?Sized> InferenceDefinition<'cfg, T> for EmptyInferenceDefinition {
-    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T> {
+    type Append<Next: InferenceDefinition<'cfg, T>> = Next;
+    fn append<Next>(self, other: Next) -> Next {
         other
     }
 }
@@ -190,7 +187,13 @@ where
     Pred: InferencePredicate,
     Next: InferenceDefinition<'cfg, T>,
 {
-    fn append(self, other: impl InferenceDefinition<'cfg, T>) -> impl InferenceDefinition<'cfg, T> {
+    type Append<Next2: InferenceDefinition<'cfg, T>> =
+        InferenceDefinitionPair<Pred, Next::Append<Next2>, B>;
+
+    fn append<Next2: InferenceDefinition<'cfg, T>>(
+        self,
+        other: Next2,
+    ) -> InferenceDefinitionPair<Pred, Next::Append<Next2>, B> {
         let Self { pred, value, next } = self;
         InferenceDefinitionPair {
             pred,
@@ -201,17 +204,9 @@ where
 }
 
 pub trait Infer<'cfg, _Bound = &'cfg Self>: 'cfg + fmt::Debug {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg>;
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        StandardInfer {}.with_methods(definition)
-    }
-
-    fn define_tags(&self) -> impl TagDefinition<'cfg> {
-        self.with_tags(define_tags())
-    }
-
+    fn define_tags(&self) -> impl TagDefinition<'cfg>;
     fn define_methods(&self) -> impl MethodDefinition<'cfg> {
-        self.with_methods(define_methods())
+        StandardInfer {}.define_methods()
     }
 }
 
@@ -221,10 +216,7 @@ trait DynInfer<'cfg>: fmt::Debug {
 
 impl<'cfg, I: Infer<'cfg>> DynInfer<'cfg> for I {
     fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>) {
-        inferrer.use_method(
-            self.with_tags(define_tags()),
-            self.with_methods(define_methods()),
-        );
+        inferrer.use_method(self.define_tags(), self.define_methods());
     }
 }
 
@@ -426,7 +418,7 @@ pub trait InferencePredicate {
 fn apply_tags<'cfg>(element: &mut Element<'cfg>, tags: impl IntoIterator<Item = TextSlice<'cfg>>) {
     let mut tags = tags.into_iter().filter(|t| !t.is_empty());
     let Some(first) = tags.next() else {
-        if element.selectors.is_empty() {
+        if !element.selectors.is_empty() {
             element.selectors.remove(0);
         }
         return;

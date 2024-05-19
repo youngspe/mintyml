@@ -1,7 +1,7 @@
 mod specialty;
 mod table;
 
-use super::engine::{define_methods, when::*, Infer, MethodDefinition, TagDefinition};
+use super::engine::{define_methods, define_tags, when::*, Infer, MethodDefinition, TagDefinition};
 
 #[rustfmt::skip]
 fn contains_phrasing(tag: &str) -> bool {
@@ -62,13 +62,13 @@ fn common_methods<'cfg>() -> impl MethodDefinition<'cfg> {
 pub struct StandardInfer {}
 
 impl<'cfg> Infer<'cfg> for StandardInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.when(line() | paragraph(), "p").default("div")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().when(line() | paragraph(), "p").default("div")
     }
 
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        definition
-            .append(common_methods())
+    fn define_methods(&self) -> impl MethodDefinition<'cfg> {
+        define_methods()
+            .apply(common_methods())
             .when(line() | paragraph(), &PhrasingInfer {})
             .default(&StandardInfer {})
     }
@@ -79,13 +79,13 @@ impl<'cfg> Infer<'cfg> for StandardInfer {
 pub struct PhrasingInfer {}
 
 impl<'cfg> Infer<'cfg> for PhrasingInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.when(paragraph(), "").default("span")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().when(paragraph(), "").default("span")
     }
 
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        definition
-            .append(common_methods())
+    fn define_methods(&self) -> impl MethodDefinition<'cfg> {
+        define_methods()
+            .apply(common_methods())
             .when(
                 tag_where(contains_phrasing) | tag_where(contains_blocks),
                 &PhrasingInfer {},

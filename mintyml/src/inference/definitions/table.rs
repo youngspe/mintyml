@@ -1,12 +1,12 @@
-use crate::inference::engine::{when::*, Infer, TagDefinition};
+use crate::inference::engine::{define_tags, when::*, Infer, TagDefinition};
 
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct TableInfer {}
 
 impl<'cfg> Infer<'cfg> for TableInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.default("tr")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().default("tr")
     }
 }
 
@@ -15,8 +15,8 @@ impl<'cfg> Infer<'cfg> for TableInfer {
 pub struct RowInfer {}
 
 impl<'cfg> Infer<'cfg> for RowInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(child_of(child_of(tag("thead"))), "th")
             .default("td")
     }
@@ -27,7 +27,7 @@ impl<'cfg> Infer<'cfg> for RowInfer {
 pub struct ColGroupInfer {}
 
 impl<'cfg> Infer<'cfg> for ColGroupInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.default("col")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().default("col")
     }
 }

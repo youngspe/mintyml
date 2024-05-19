@@ -1,4 +1,4 @@
-use crate::inference::engine::{when::*, Infer, MethodDefinition, TagDefinition};
+use crate::inference::engine::{define_tags, when::*, Infer, TagDefinition};
 
 use super::{common_methods, PhrasingInfer, StandardInfer};
 
@@ -7,18 +7,11 @@ use super::{common_methods, PhrasingInfer, StandardInfer};
 pub struct RootInfer {}
 
 impl<'cfg> Infer<'cfg> for RootInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(first() & paragraph(), "title")
             .when(first(), "head")
             .default("body")
-    }
-
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        definition
-            .append(common_methods())
-            .when(line() | paragraph(), &PhrasingInfer {})
-            .default(&StandardInfer {})
     }
 }
 
@@ -27,15 +20,8 @@ impl<'cfg> Infer<'cfg> for RootInfer {
 pub struct ListInfer {}
 
 impl<'cfg> Infer<'cfg> for ListInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.default("li")
-    }
-
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        definition
-            .append(common_methods())
-            .when(line() | paragraph(), &PhrasingInfer {})
-            .default(&StandardInfer {})
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().default("li")
     }
 }
 
@@ -44,15 +30,8 @@ impl<'cfg> Infer<'cfg> for ListInfer {
 pub struct DescriptionListInfer {}
 
 impl<'cfg> Infer<'cfg> for DescriptionListInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.when(line(), "dt").default("dd")
-    }
-
-    fn with_methods(&self, definition: impl MethodDefinition<'cfg>) -> impl MethodDefinition<'cfg> {
-        definition
-            .append(common_methods())
-            .when(line() | paragraph(), &PhrasingInfer {})
-            .default(&StandardInfer {})
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().when(line(), "dt").default("dd")
     }
 }
 
@@ -61,8 +40,8 @@ impl<'cfg> Infer<'cfg> for DescriptionListInfer {
 pub struct OptGroupInfer {}
 
 impl<'cfg> Infer<'cfg> for OptGroupInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.default("option")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().default("option")
     }
 }
 
@@ -71,8 +50,8 @@ impl<'cfg> Infer<'cfg> for OptGroupInfer {
 pub struct SelectInfer {}
 
 impl<'cfg> Infer<'cfg> for SelectInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.when(block(), "optgroup").default("option")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().when(block(), "optgroup").default("option")
     }
 }
 
@@ -81,8 +60,8 @@ impl<'cfg> Infer<'cfg> for SelectInfer {
 pub struct MapInfer {}
 
 impl<'cfg> Infer<'cfg> for MapInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition.default("area")
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags().default("area")
     }
 }
 
@@ -91,8 +70,8 @@ impl<'cfg> Infer<'cfg> for MapInfer {
 pub struct DetailsInfer {}
 
 impl<'cfg> Infer<'cfg> for DetailsInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(first(), "summary")
             .apply_from(&StandardInfer {})
     }
@@ -103,8 +82,8 @@ impl<'cfg> Infer<'cfg> for DetailsInfer {
 pub struct LabelInfer {}
 
 impl<'cfg> Infer<'cfg> for LabelInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(line(), "input")
             .apply_from(&StandardInfer {})
     }
@@ -115,8 +94,8 @@ impl<'cfg> Infer<'cfg> for LabelInfer {
 pub struct FieldSetInfer {}
 
 impl<'cfg> Infer<'cfg> for FieldSetInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(first() & paragraph(), "legend")
             .apply_from(&StandardInfer {})
     }
@@ -127,8 +106,8 @@ impl<'cfg> Infer<'cfg> for FieldSetInfer {
 pub struct PictureInfer {}
 
 impl<'cfg> Infer<'cfg> for PictureInfer {
-    fn with_tags(&self, definition: impl TagDefinition<'cfg>) -> impl TagDefinition<'cfg> {
-        definition
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        define_tags()
             .when(line() & last(), "img")
             .when(line(), "source")
     }
