@@ -1,6 +1,6 @@
 use crate::inference::engine::{define_tags, when::*, Infer, TagDefinition};
 
-use super::{common_methods, PhrasingInfer, StandardInfer};
+use super::StandardInfer;
 
 #[non_exhaustive]
 #[derive(Debug)]

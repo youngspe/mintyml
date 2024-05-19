@@ -7,7 +7,7 @@ use gramma::parse::LocationRange;
 
 use crate::{ast, error::UnclosedDelimiterKind, utils::default};
 
-use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector};
+use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector, TextSlice};
 
 #[non_exhaustive]
 #[derive(Clone, Copy)]
@@ -114,6 +114,32 @@ impl<'cfg> Element<'cfg> {
                     | ElementType::Special { .. }
             )
     }
+
+    pub fn apply_tags(&mut self, tags: impl IntoIterator<Item = TextSlice<'cfg>>) {
+        let mut tags = tags.into_iter().filter(|t| !t.is_empty());
+        let Some(first) = tags.next() else {
+            if !self.selectors.is_empty() {
+                self.selectors.remove(0);
+            }
+            return;
+        };
+
+        let selector_location;
+
+        if let Some(selector) = self.selectors.first_mut() {
+            selector_location = selector.range.end;
+            selector.tag = first.into();
+        } else {
+            selector_location = self.range.start;
+            self.selectors
+                .push(Selector::empty(selector_location).with_tag(first))
+        }
+
+        self.selectors.splice(
+            1..1,
+            tags.map(|t| Selector::empty(selector_location).with_tag(t)),
+        );
+    }
 }
 
 /// The type of a special element.
@@ -152,7 +178,7 @@ impl<'cfg> From<Element<'cfg>> for Node<'cfg> {
     }
 }
 
-impl<'cfg> BuildContext<'cfg> {
+impl<'cfg> BuildContext<'_, 'cfg> {
     fn build_inline_special(
         &mut self,
         range: LocationRange,

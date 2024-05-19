@@ -1,6 +1,6 @@
 use core::fmt::{self, Display};
 
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, vec::Vec};
 
 use derive_more::Display;
 use gramma::{parse::LocationRange, ParseError};
@@ -9,8 +9,8 @@ use crate::{
     document::SpecialKind,
     escape::EscapeError,
     output::OutputError,
-    utils::{join_display, DisplayFn},
-    Src,
+    utils::{default, join_display, DisplayFn},
+    OutputConfig, Src,
 };
 
 /// Represents a syntax error in the MinTyML source.
@@ -271,6 +271,12 @@ pub enum ConvertError<'src> {
         syntax_errors: alloc::vec::Vec<SyntaxError>,
         src: Src<'src>,
     },
+    /// The conversion failed due to one or more semantic errors.
+    #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(semantic_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
+    Semantic {
+        semantic_errors: alloc::vec::Vec<SemanticError>,
+        src: Src<'src>,
+    },
     /// The conversion failed for some other reason.
     #[cfg_attr(feature = "error-trait", error("Unknown"))]
     Unknown,
@@ -284,6 +290,13 @@ impl<'src> ConvertError<'src> {
                 syntax_errors,
                 src: src.into_owned().into(),
             },
+            ConvertError::Semantic {
+                semantic_errors,
+                src,
+            } => ConvertError::Semantic {
+                semantic_errors,
+                src: src.into_owned().into(),
+            },
             Self::Unknown => ConvertError::Unknown,
         }
     }
@@ -294,5 +307,124 @@ impl From<OutputError> for ConvertError<'_> {
         match value {
             OutputError::WriteError(fmt::Error) => Self::Unknown,
         }
+    }
+}
+
+/// Represents an invalid document structure in otherwise syntactically-correct MinTyML source.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "error-trait", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
+pub struct SemanticError {
+    /// The [LocationRange] of the source that best illustrates the cause of the error.
+    pub range: LocationRange,
+    pub kind: SemanticErrorKind,
+}
+
+/// Indicates what caused a semantic error.
+#[derive(Debug, Display, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SemanticErrorKind {
+    #[default]
+    Unknown,
+}
+
+impl SemanticError {
+    pub(crate) fn display_with_src<'data>(
+        &'data self,
+        _src: &'data str,
+    ) -> impl fmt::Display + 'data {
+        DisplayFn(move |f| match self.kind {
+            ref kind => write!(f, "{kind}"),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InternalError;
+pub(crate) type InternalResult<T = ()> = Result<T, InternalError>;
+
+#[derive(Debug)]
+pub(crate) struct Errors {
+    fail_fast: bool,
+    syntax_errors: Vec<SyntaxError>,
+    semantic_errors: Vec<SemanticError>,
+    unknown_error: bool,
+}
+
+impl Errors {
+    pub fn new(config: &OutputConfig) -> Self {
+        Self {
+            fail_fast: config.fail_fast.unwrap_or(false),
+            syntax_errors: default(),
+            semantic_errors: default(),
+            unknown_error: false,
+        }
+    }
+
+    pub fn count(&self) -> usize {
+        self.syntax_errors.len() + self.semantic_errors.len() + self.unknown_error as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
+
+    pub fn to_convert_error<'src>(
+        self,
+        src: impl Into<Cow<'src, str>>,
+    ) -> Result<(), ConvertError<'src>> {
+        let src = src.into();
+
+        let Self {
+            syntax_errors,
+            semantic_errors,
+            unknown_error,
+            ..
+        } = self;
+
+        Err(
+            match (syntax_errors.len(), semantic_errors.len(), unknown_error) {
+                (0, 0, false) => return Ok(()),
+                (1.., _, _) => ConvertError::Syntax { syntax_errors, src },
+                (_, 1.., _) => ConvertError::Semantic {
+                    semantic_errors,
+                    src,
+                },
+                (_, _, true) => ConvertError::Unknown,
+            },
+        )
+    }
+
+    pub fn syntax<E>(&mut self, errors: impl IntoIterator<Item = E>) -> InternalResult
+    where
+        E: Into<SyntaxError>,
+    {
+        let old_len = self.syntax_errors.len();
+        self.syntax_errors
+            .extend(errors.into_iter().map(Into::into));
+        if self.fail_fast && old_len < self.syntax_errors.len() {
+            return Err(InternalError);
+        }
+        Ok(())
+    }
+
+    pub fn semantic<E>(&mut self, errors: impl IntoIterator<Item = E>) -> InternalResult
+    where
+        E: Into<SemanticError>,
+    {
+        let old_len = self.semantic_errors.len();
+        self.semantic_errors
+            .extend(errors.into_iter().map(Into::into));
+        if self.fail_fast && old_len < self.semantic_errors.len() {
+            return Err(InternalError);
+        }
+        Ok(())
+    }
+
+    pub fn unknown(&mut self) -> InternalResult {
+        self.unknown_error = true;
+        if self.fail_fast {
+            return Err(InternalError);
+        }
+        Ok(())
     }
 }

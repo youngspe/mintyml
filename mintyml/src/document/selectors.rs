@@ -124,12 +124,12 @@ pub enum SelectorItem<'cfg> {
 
 #[non_exhaustive]
 pub struct Attribute<'cfg> {
-    range: LocationRange,
-    name: TextSlice<'cfg>,
-    value: Option<TextSlice<'cfg>>,
+    pub range: LocationRange,
+    pub name: TextSlice<'cfg>,
+    pub value: Option<TextSlice<'cfg>>,
 }
 
-impl<'cfg> BuildContext<'cfg> {
+impl<'cfg> BuildContext<'_, 'cfg> {
     fn build_attribute(
         &mut self,
         &ast::Attribute {

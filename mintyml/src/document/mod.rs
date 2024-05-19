@@ -9,22 +9,19 @@ use gramma::parse::{Location, LocationRange};
 
 use crate::{
     ast,
-    error::{ItemType, MisplacedKind, SyntaxError, SyntaxErrorKind, UnclosedDelimiterKind},
+    error::{
+        Errors, InternalError, InternalResult, ItemType, MisplacedKind, SyntaxError,
+        SyntaxErrorKind, UnclosedDelimiterKind,
+    },
     escape::escape_errors,
     utils::default,
-    OutputConfig,
 };
 
 pub use elements::*;
 pub use selectors::*;
 pub use text::*;
 
-/// Indicates some error occurred while building the tree.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-struct BuildError {}
-
-type BuildResult<T = ()> = Result<T, BuildError>;
+type BuildResult<T = ()> = InternalResult<T>;
 
 #[non_exhaustive]
 pub struct Node<'cfg> {
@@ -101,16 +98,14 @@ impl<'cfg> From<Node<'cfg>> for Content<'cfg> {
 
 /// An object that holds relevant state and resources for building a document.
 #[derive(Debug)]
-struct BuildContext<'cfg> {
+struct BuildContext<'cx, 'cfg> {
     /// The MinTyML source string.
     pub src: &'cfg str,
     /// All syntax errors found while building so far.
-    pub errors: Vec<SyntaxError>,
-    /// If true, exit at the first error.
-    pub fail_fast: bool,
+    pub errors: &'cx mut Errors,
 }
 
-impl<'cfg> BuildContext<'cfg> {
+impl<'cfg> BuildContext<'_, 'cfg> {
     /// Extracts a slice of the source.
     fn slice(&self, range: LocationRange) -> TextSlice<'cfg> {
         TextSlice::FromSource { range }
@@ -123,53 +118,38 @@ impl<'cfg> BuildContext<'cfg> {
         escape: bool,
     ) -> BuildResult<TextSlice<'cfg>> {
         if escape {
-            self.record_errors(escape_errors(range.slice(self.src), range.start))?;
+            self.errors
+                .syntax(escape_errors(range.slice(self.src), range.start))?;
         }
         Ok(self.slice(range))
     }
-
-    /// Adds the given errors to the context.
-    /// Returns `Err(_)` if `errors` contained at least one value.
-    fn record_errors<E: Into<SyntaxError>>(
-        &mut self,
-        errors: impl IntoIterator<Item = E>,
-    ) -> BuildResult<()> {
-        let pre_len = self.errors.len();
-        self.errors.extend(errors.into_iter().map(Into::into));
-        if self.fail_fast && self.errors.len() > pre_len {
-            Err(default())
-        } else {
-            Ok(())
-        }
-    }
-
     fn unclosed(
         &mut self,
         opening: LocationRange,
         delimiter: UnclosedDelimiterKind,
     ) -> BuildResult {
-        self.record_errors([SyntaxError {
+        self.errors.syntax([SyntaxError {
             range: opening,
             kind: SyntaxErrorKind::Unclosed { delimiter },
         }])
     }
 
     fn invalid(&mut self, range: LocationRange, item: ItemType) -> BuildResult {
-        self.record_errors([SyntaxError {
+        self.errors.syntax([SyntaxError {
             range,
             kind: SyntaxErrorKind::InvalidItem { item },
         }])
     }
 
     fn misplaced(&mut self, range: LocationRange, kind: MisplacedKind) -> BuildResult {
-        self.record_errors([SyntaxError {
+        self.errors.syntax([SyntaxError {
             range,
             kind: SyntaxErrorKind::MisplacedItem { kind },
         }])
     }
 }
 
-impl<'cfg> BuildContext<'cfg> {
+impl<'cfg> BuildContext<'_, 'cfg> {
     pub fn build_content(
         &mut self,
         &ast::Content {
@@ -348,6 +328,7 @@ impl<'cfg> BuildContext<'cfg> {
                                 block: node_range,
                             }
                             .into(),
+                            selectors: mem::take(selectors),
                             ..self.build_block(node_range, value)?
                         }
                         .into(),
@@ -599,15 +580,12 @@ impl<'cfg> Document<'cfg> {
     pub(crate) fn from_ast(
         src: &'cfg str,
         ast: &ast::Document,
-        config: &OutputConfig<'cfg>,
-    ) -> (Option<Self>, Vec<SyntaxError>) {
-        let mut cx = BuildContext {
-            src,
-            errors: default(),
-            fail_fast: config.fail_fast.unwrap_or(false),
-        };
-        let content = cx.build_content(&ast.content);
-        let out = content.map(|content| Self {
+        errors: &mut Errors,
+    ) -> InternalResult<Self> {
+        let mut cx = BuildContext { src, errors };
+        let content = cx.build_content(&ast.content)?;
+
+        Ok(Self {
             range: LocationRange {
                 start: Location { position: 0 },
                 end: Location {
@@ -615,17 +593,16 @@ impl<'cfg> Document<'cfg> {
                 },
             },
             content,
-        });
-        (out.ok(), cx.errors)
+        })
     }
 
-    pub(crate) fn parse(
-        src: &'cfg str,
-        config: &OutputConfig<'cfg>,
-    ) -> (Option<Self>, Vec<SyntaxError>) {
+    pub(crate) fn parse(src: &'cfg str, errors: &mut Errors) -> InternalResult<Self> {
         match ast::parse(src) {
-            Ok(ast) => Self::from_ast(src, &ast, config),
-            Err(e) => return (None, vec![e.into()]),
+            Ok(ast) => Self::from_ast(src, &ast, errors),
+            Err(e) => {
+                errors.syntax([e])?;
+                return Err(InternalError);
+            }
         }
     }
 }

@@ -79,7 +79,7 @@ pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
         let tags = value.tags();
         self.append(InferenceDefinitionPair {
             pred,
-            value: TagFn(move |element: &mut Element<'cfg>| apply_tags(element, tags.clone())),
+            value: TagFn(move |element: &mut Element<'cfg>| element.apply_tags(tags.clone())),
             next: EmptyInferenceDefinition {},
         })
     }
@@ -414,32 +414,6 @@ pub trait InferencePredicate {
     fn direction_precedence(&self) -> DirectionPrecedence {
         default()
     }
-}
-fn apply_tags<'cfg>(element: &mut Element<'cfg>, tags: impl IntoIterator<Item = TextSlice<'cfg>>) {
-    let mut tags = tags.into_iter().filter(|t| !t.is_empty());
-    let Some(first) = tags.next() else {
-        if !element.selectors.is_empty() {
-            element.selectors.remove(0);
-        }
-        return;
-    };
-
-    let selector_location;
-
-    if let Some(selector) = element.selectors.first_mut() {
-        selector_location = selector.range.end;
-        selector.tag = first.into();
-    } else {
-        selector_location = element.range.start;
-        element
-            .selectors
-            .push(Selector::empty(selector_location).with_tag(first))
-    }
-
-    element.selectors.splice(
-        1..1,
-        tags.map(|t| Selector::empty(selector_location).with_tag(t)),
-    );
 }
 
 impl<'cfg, 'infer> InferenceTarget<'cfg, 'infer> {

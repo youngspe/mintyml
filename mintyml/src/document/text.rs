@@ -103,9 +103,6 @@ impl<'cfg> From<Space<'cfg>> for TextLike<'cfg> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Space<'cfg> {
-    /// Whitespace between elements on the same line.
-    #[non_exhaustive]
-    Inline {},
     /// Whitespace between lines of a paragraph.
     #[non_exhaustive]
     LineEnd {},
@@ -114,7 +111,7 @@ pub enum Space<'cfg> {
     ParagraphEnd {},
     /// A specific string of whitespace.
     #[non_exhaustive]
-    Exact { slice: TextSlice<'cfg> },
+    Inline { slice: Option<TextSlice<'cfg>> },
 }
 
 #[non_exhaustive]
@@ -123,7 +120,7 @@ pub enum Comment<'cfg> {
     Tag { value: TextSlice<'cfg> },
 }
 
-impl<'cfg> BuildContext<'cfg> {
+impl<'cfg> BuildContext<'_, 'cfg> {
     pub fn build_text_node(
         &mut self,
         range: LocationRange,
@@ -234,8 +231,8 @@ impl<'cfg> BuildContext<'cfg> {
             range,
             node_type: NodeType::TextLike {
                 value: TextLike::Space {
-                    value: Space::Exact {
-                        slice: self.slice(range),
+                    value: Space::Inline {
+                        slice: Some(self.slice(range)),
                     },
                 },
             },
@@ -279,7 +276,7 @@ impl<'cfg> BuildContext<'cfg> {
             range: range.unwrap_or(LocationRange::INVALID),
             node_type: NodeType::TextLike {
                 value: TextLike::Space {
-                    value: Space::Inline {},
+                    value: Space::Inline { slice: None },
                 },
             },
         })

@@ -19,12 +19,12 @@ pub mod error;
 pub(crate) mod escape;
 pub(crate) mod inference;
 pub(crate) mod output;
-// TODO: restore this
-// pub(crate) mod transform;
+pub(crate) mod transform;
 pub(crate) mod utils;
 
 use alloc::{borrow::Cow, string::String};
 use core::{borrow::Borrow, fmt};
+use error::{Errors, InternalError};
 
 use document::Document;
 use output::OutputError;
@@ -161,45 +161,23 @@ fn convert_to_internal<'src>(
     out: &mut impl fmt::Write,
     forgive: bool,
 ) -> Result<(), ConvertError<'src>> {
-    let config: &OutputConfig = config;
-    let (document, syntax_errors) = Document::parse(src, config);
+    let mut errors = Errors::new(config);
 
-    let mut document = match (document, syntax_errors.is_empty(), config.fail_fast) {
-        (Some(d), true, _) | (Some(d), _, None | Some(false)) => d,
-        _ => {
-            return Err(ConvertError::Syntax {
-                syntax_errors,
-                src: src.into(),
-            })
+    let (Ok(()) | Err(InternalError)) = (|| {
+        let mut document = Document::parse(src, &mut errors)?;
+        document = transform::transform_document(document, config, &mut errors)?;
+        inference::engine::infer(src, &mut document.content);
+
+        if errors.is_empty() || forgive {
+            output::output_html_to(src, &document, out, config)
+                .map_err(|e| match e {
+                    OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
+                })
+                .or_else(|_| errors.unknown())?;
         }
-    };
 
-    // TODO: restore this:
-    // if config.complete_page.unwrap_or(false) {
-    //     transform::complete_page::complete_page(&mut document, &config);
-    // }
+        Ok(())
+    })();
 
-    // transform::infer_elements::infer_elements(&mut document, &config.special_tags);
-    // transform::apply_lang(&mut document, &config.lang);
-
-    // if let Some(ref metadata) = config.metadata {
-    //     transform::metadata::add_metadata(&mut document, metadata);
-    // }
-
-    inference::engine::infer(src, &mut document.content);
-
-    if syntax_errors.is_empty() || forgive {
-        output::output_html_to(src, &document, out, config).map_err(|e| match e {
-            OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
-        })?;
-    }
-
-    if !syntax_errors.is_empty() {
-        return Err(ConvertError::Syntax {
-            syntax_errors,
-            src: src.into(),
-        });
-    }
-
-    Ok(())
+    errors.to_convert_error(src)
 }

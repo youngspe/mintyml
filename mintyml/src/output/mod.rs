@@ -279,12 +279,15 @@ where
     fn space(&mut self, space: &Space) -> OutputResult {
         if !self.follows_space {
             match space {
+                Space::Inline { slice: Some(slice) } => self.out.write_str(self.slice(slice))?,
                 Space::LineEnd { .. } | Space::ParagraphEnd { .. }
                     if !self.format_inline() && self.config.indent.is_some() =>
                 {
                     self._line()?
                 }
-                _ => self.out.write_str(" ")?,
+                Space::Inline { slice: None }
+                | Space::LineEnd { .. }
+                | Space::ParagraphEnd { .. } => self.out.write_str(" ")?,
             }
             self.follows_space = true;
         }
@@ -601,8 +604,10 @@ section {
         indent: Some("  ".into()),
         ..default()
     };
-    let (document, errors) = Document::parse(src, &config);
-    let document = document.ok_or_else(|| errors).unwrap();
+
+    let mut errors = crate::error::Errors::new(&config);
+    let document = Document::parse(src, &mut errors).unwrap();
+    errors.to_convert_error(src).unwrap();
 
     output_html_to(src, &document, &mut out, &config).unwrap();
     #[cfg(feature = "std")]
