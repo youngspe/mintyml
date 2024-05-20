@@ -9,9 +9,6 @@ extern crate derive_more;
 extern crate either;
 extern crate gramma;
 
-#[cfg(feature = "error-trait")]
-extern crate thiserror;
-
 pub(crate) mod ast;
 pub(crate) mod config;
 pub(crate) mod document;

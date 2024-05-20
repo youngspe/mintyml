@@ -15,12 +15,25 @@ use crate::{
 
 /// Represents a syntax error in the MinTyML source.
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "error-trait", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
+#[derive(Default, Display, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[display(
+    fmt = "{kind} at character {}..<{}",
+    "range.start.position",
+    "range.end.position"
+)]
+#[cfg_attr(feature = "error-trait", derive(derive_more::Error))]
 pub struct SyntaxError {
     /// The [LocationRange] encapsulating the syntax error.
     pub range: LocationRange,
     pub kind: SyntaxErrorKind,
+}
+
+impl fmt::Debug for SyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SyntaxError")?;
+        f.debug_set().entry(&format_args!("{self}")).finish()?;
+        Ok(())
+    }
 }
 
 impl SyntaxError {
@@ -47,7 +60,11 @@ impl SyntaxError {
                     kind => write!(f, "{kind}"),
                 }?;
 
-                write!(f, " at character {}", self.range.start.position)
+                write!(f, " at character {}", self.range.start.position)?;
+                if self.range.end > self.range.start {
+                    write!(f, "..<{}", self.range.end.position)?;
+                }
+                Ok(())
             };
 
             if self.range.start.position >= src.len() {
@@ -262,26 +279,38 @@ pub enum MisplacedKind {
 
 /// Represents an error that occurred while converting MinTyML.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
+#[derive(Display, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "error-trait", derive(derive_more::Error))]
 pub enum ConvertError<'src> {
     /// The conversion failed due to one or more syntax errors.
-    #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
+    #[display(
+        fmt = "{}",
+        r#"crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")"#,
+    )]
     Syntax {
-        syntax_errors: alloc::vec::Vec<SyntaxError>,
+        syntax_errors: Vec<SyntaxError>,
         src: Src<'src>,
     },
     /// The conversion failed due to one or more semantic errors.
-    #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(semantic_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
+    #[display(
+        fmt = "{}",
+        r#"crate::utils::join_display(semantic_errors.iter().map(|x| x.display_with_src(src)), "; ")"#,
+    )]
     Semantic {
-        semantic_errors: alloc::vec::Vec<SemanticError>,
+        semantic_errors: Vec<SemanticError>,
         src: Src<'src>,
     },
     /// The conversion failed for some other reason.
-    #[cfg_attr(feature = "error-trait", error("Unknown"))]
     Unknown,
 }
 
+impl<'src> fmt::Debug for ConvertError<'src> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ConvertError")?;
+        f.debug_set().entry(&format_args!("{self}")).finish()?;
+        Ok(())
+    }
+}
 impl<'src> ConvertError<'src> {
     /// Copies all borrowed data so the error can outlive the source str.
     pub fn to_static(self) -> ConvertError<'static> {
@@ -312,8 +341,13 @@ impl From<OutputError> for ConvertError<'_> {
 
 /// Represents an invalid document structure in otherwise syntactically-correct MinTyML source.
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "error-trait", derive(thiserror::Error), error("{kind:?} at character {}", range.start.position))]
+#[derive(Debug, Display, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[display(
+    fmt = "{kind} at character {}..<{}",
+    "range.start.position",
+    "range.end.position"
+)]
+#[cfg_attr(feature = "error-trait", derive(derive_more::Error))]
 pub struct SemanticError {
     /// The [LocationRange] of the source that best illustrates the cause of the error.
     pub range: LocationRange,

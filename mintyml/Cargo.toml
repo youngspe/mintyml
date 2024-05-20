@@ -12,13 +12,6 @@ version = "0.99.17"
 default-features = false
 features = ["display", "add"]
 
-[dependencies.thiserror]
-version = "1.0.57"
-default-features = false
-optional = true
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies.either]
 version = "1.9"
 default-features = false
@@ -30,4 +23,4 @@ default-features = false
 [features]
 default = []
 std = ["gramma/std"]
-error-trait = ["std", "dep:thiserror", "derive_more/error"]
+error-trait = ["std", "derive_more/error"]
