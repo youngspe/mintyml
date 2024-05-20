@@ -59,6 +59,7 @@ impl<'cfg> TransformContext<'_, 'cfg> {
             let tag_name = self.tag_name(kind)?;
             element.apply_tags([tag_name.into()]);
         }
+        element.content = self.transform_content(element.content)?;
         Ok(element)
     }
 }
