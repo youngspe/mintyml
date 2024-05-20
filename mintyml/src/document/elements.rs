@@ -216,7 +216,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
             Code { .. } => SpecialKind::Code,
         };
 
-        if !is_unclosed {
+        if is_unclosed {
             self.unclosed(open, UnclosedDelimiterKind::SpecialInline { kind })?;
         }
 
