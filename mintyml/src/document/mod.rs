@@ -157,6 +157,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
             ref lines,
             end,
         }: &ast::Content,
+        form_paragraphs: bool,
     ) -> BuildResult<Content<'cfg>> {
         let mut out_nodes = Vec::<Node<'cfg>>::new();
         let mut node_buf = Vec::new();
@@ -180,6 +181,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
                     &mut node_buf,
                     LocationRange { start, end },
                     last_line_end,
+                    form_paragraphs,
                 )?;
             }
             last_line_end = end;
@@ -244,6 +246,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         line: &mut Vec<Node<'cfg>>,
         range: LocationRange,
         last_line_end: Location,
+        form_paragraphs: bool,
     ) -> BuildResult {
         let first_visible = line.iter().find(|n| n.is_visible());
         let starts_with_element = first_visible
@@ -262,7 +265,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
                 out_nodes.push(self.paragraph_end(last_line_end, range.start)?);
             }
 
-            if starts_with_element {
+            if starts_with_element || !form_paragraphs {
                 out_nodes.extend(line.drain(..))
             } else {
                 let paragraph = Element {
@@ -329,7 +332,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
                             }
                             .into(),
                             selectors: mem::take(selectors),
-                            ..self.build_block(node_range, value)?
+                            ..self.build_block(node_range, value, false)?
                         }
                         .into(),
                     );
@@ -445,7 +448,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
                 ast::NodeType::Element {
                     element: ast::Element::Block { value },
                 } => {
-                    let mut element = self.build_block(prefix_range, value)?;
+                    let mut element = self.build_block(prefix_range, value, true)?;
                     element.selectors = mem::take(selectors);
                     out_nodes.push(element.into());
                     return Ok(());
@@ -583,7 +586,7 @@ impl<'cfg> Document<'cfg> {
         errors: &mut Errors,
     ) -> InternalResult<Self> {
         let mut cx = BuildContext { src, errors };
-        let content = cx.build_content(&ast.content)?;
+        let content = cx.build_content(&ast.content, true)?;
 
         Ok(Self {
             range: LocationRange {

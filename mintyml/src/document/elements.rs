@@ -221,7 +221,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         }
 
         Ok(Element {
-            content: self.build_content(content)?,
+            content: self.build_content(content, false)?,
             ..Element::new(range, kind)
         })
     }
@@ -283,12 +283,13 @@ impl<'cfg> BuildContext<'_, 'cfg> {
             content,
             r_brace,
         }: &ast::Block,
+        paragraphs: bool,
     ) -> BuildResult<Element<'cfg>> {
         if r_brace.is_none() {
             self.unclosed(l_brace.range, UnclosedDelimiterKind::Block {})?;
         }
         Ok(Element {
-            content: self.build_content(content)?,
+            content: self.build_content(content, paragraphs)?,
             ..Element::new(range, ElementDelimiter::Block { block: range })
         })
     }
@@ -313,7 +314,9 @@ impl<'cfg> BuildContext<'_, 'cfg> {
                 }
                 .into(),
             ),
-            ast::Element::Block { value } => out_nodes.push(self.build_block(range, value)?.into()),
+            ast::Element::Block { value } => {
+                out_nodes.push(self.build_block(range, value, true)?.into())
+            }
             ast::Element::MultilineCode { value } => {
                 let _ = value;
                 todo!()
