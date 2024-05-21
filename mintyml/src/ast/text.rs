@@ -1,6 +1,8 @@
 use alloc::{boxed::Box, vec::Vec};
 use gramma::parse::{Location, LocationRange};
 
+use crate::ast::post_selector_chain;
+
 use super::tokens::*;
 
 gramma::define_string_pattern!(
@@ -12,7 +14,7 @@ gramma::define_string_pattern!(
                 | escape(),
         )
         .simple()
-            + !precedes(space().repeat(..).simple() + (char(">[{")))
+            + !precedes(post_selector_chain())
     }
 
     fn interpolation() {

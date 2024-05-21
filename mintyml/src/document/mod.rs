@@ -471,12 +471,6 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         nodes: &mut &[(Option<ast::Space>, ast::Node)],
         out_nodes: &mut Vec<Node<'cfg>>,
     ) -> BuildResult {
-        enum State<'cfg> {
-            Initial,
-            Inline { element_nodes: Vec<Node<'cfg>> },
-            PostSelector { selectors: Vec<Selector<'cfg>> },
-            PostChildCombinator { selectors: Vec<Selector<'cfg>> },
-        }
         while let Some((
             &(
                 ref space,

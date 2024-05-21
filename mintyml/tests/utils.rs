@@ -32,10 +32,7 @@ pub fn convert_unwrap(
 ) -> String {
     match convert_inner(src.as_ref(), cfg, false) {
         Ok(x) => x,
-        #[cfg(feature = "std")]
         Err((_, e)) => panic!("{e}"),
-        #[cfg(not(feature = "std"))]
-        Err((_, e)) => panic!("{e:?}"),
     }
 }
 

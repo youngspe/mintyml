@@ -32,6 +32,12 @@ gramma::define_string_pattern!(
         )
         .simple()
     }
+    pub fn post_selector_chain() {
+        char(" \t").repeat(..).simple()
+            + (char('>') | char('{') + !precedes(!(whitespace() | char('}'))))
+            | char('[')
+            | src_end()
+    }
 );
 
 gramma::define_token!(
@@ -41,11 +47,7 @@ gramma::define_token!(
     pub struct ClassName;
 
     #[pattern(matcher = {
-        selector_chain() + precedes(
-            char(" \t").repeat(..).simple() + char(">{")
-            | char('[')
-            | src_end()
-        )
+        selector_chain() + precedes(post_selector_chain())
     })]
     pub struct SelectorChain;
 
@@ -68,10 +70,15 @@ gramma::define_rule!(
         pub end: Location,
     }
 
-    #[transform(parse_as<SelectorChain>)]
-    pub struct SelectorStart {
-        pub element: Option<ElementSelector>,
-        pub class_like: Vec<ClassLike>,
+    pub enum SelectorStart {
+        Attributes {
+            attributes: AttributeSelector,
+        },
+        #[transform(parse_as<SelectorChain>)]
+        Tag {
+            element: Option<ElementSelector>,
+            class_like: Vec<ClassLike>,
+        },
     }
 
     pub enum SelectorSegment {

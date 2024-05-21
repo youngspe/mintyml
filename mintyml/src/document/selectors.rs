@@ -226,28 +226,41 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         &mut self,
         &ast::Selector {
             start,
-            first:
-                ast::SelectorStart {
-                    ref element,
-                    class_like: ref first,
-                },
+            first: ref selector_start,
             ref segments,
             end,
         }: &ast::Selector,
     ) -> BuildResult<Selector<'cfg>> {
         let range = LocationRange { start, end };
-        let element = self.build_tag(element)?;
+        let tag;
+        let mut selector_items;
+        let mut est_item_count = segments
+            .iter()
+            .map(|s| match s {
+                SelectorSegment::Attributes { .. } => 1,
+                SelectorSegment::ClassLike { items: value } => value.len(),
+            })
+            .sum::<usize>();
 
-        let est_item_count = first.len()
-            + segments
-                .iter()
-                .map(|s| match s {
-                    SelectorSegment::Attributes { .. } => 1,
-                    SelectorSegment::ClassLike { items: value } => value.len(),
-                })
-                .sum::<usize>();
-        let mut selector_items = Vec::with_capacity(est_item_count);
-        self.extend_class_like(&mut selector_items, first)?;
+        match selector_start {
+            &ast::SelectorStart::Tag {
+                ref element,
+                ref class_like,
+            } => {
+                tag = self.build_tag(element)?;
+
+                est_item_count += class_like.len();
+                selector_items = Vec::with_capacity(est_item_count);
+                self.extend_class_like(&mut selector_items, class_like)?;
+            }
+            &ast::SelectorStart::Attributes { ref attributes } => {
+                est_item_count += 1;
+                selector_items = Vec::with_capacity(est_item_count);
+
+                tag = Tag::Implicit {};
+                selector_items.push(self.build_attribute_list(attributes)?);
+            }
+        }
 
         for segment in segments {
             match segment {
@@ -262,7 +275,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
 
         Ok(Selector {
             range,
-            tag: element,
+            tag,
             items: selector_items,
         })
     }
