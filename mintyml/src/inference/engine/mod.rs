@@ -338,7 +338,7 @@ impl<'cfg, 'infer> InferencePredicateContext<'cfg, 'infer> {
     ) -> TestResult<T> {
         self.match_this_node(|n| match n {
             Node {
-                node_type: NodeType::Element { value },
+                node_type: NodeType::Element { element: value },
                 ..
             } => f(value).map(Into::into),
             _ => Ok(None),

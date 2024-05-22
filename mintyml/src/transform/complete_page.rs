@@ -1,3 +1,4 @@
+use alloc::vec;
 use core::mem;
 
 use gramma::parse::LocationRange;
@@ -94,7 +95,7 @@ pub fn complete_page<'cfg>(mut doc: Document<'cfg>, src: &str) -> InternalResult
             Node {
                 range: LocationRange::INVALID,
                 node_type: NodeType::TextLike {
-                    value: Space::ParagraphEnd {}.into(),
+                    text_like: Space::ParagraphEnd {}.into(),
                 },
             },
             body.into(),

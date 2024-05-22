@@ -52,9 +52,9 @@ impl From<LocationRange> for TextSlice<'_> {
 }
 
 impl<'cfg> From<Space<'cfg>> for NodeType<'cfg> {
-    fn from(value: Space<'cfg>) -> Self {
+    fn from(space: Space<'cfg>) -> Self {
         NodeType::TextLike {
-            value: TextLike::Space { value },
+            text_like: TextLike::Space { space },
         }
     }
 }
@@ -75,6 +75,7 @@ impl<'cfg> Default for TextSlice<'cfg> {
 }
 
 #[non_exhaustive]
+#[derive(Default)]
 pub struct Text<'cfg> {
     pub slice: TextSlice<'cfg>,
     pub multiline: bool,
@@ -86,16 +87,16 @@ pub struct Text<'cfg> {
 #[non_exhaustive]
 pub enum TextLike<'cfg> {
     #[non_exhaustive]
-    Text { value: Text<'cfg> },
+    Text { text: Text<'cfg> },
     #[non_exhaustive]
-    Comment { value: Comment<'cfg> },
+    Comment { comment: Comment<'cfg> },
     #[non_exhaustive]
-    Space { value: Space<'cfg> },
+    Space { space: Space<'cfg> },
 }
 
 impl<'cfg> From<Space<'cfg>> for TextLike<'cfg> {
-    fn from(value: Space<'cfg>) -> Self {
-        Self::Space { value }
+    fn from(space: Space<'cfg>) -> Self {
+        Self::Space { space }
     }
 }
 
@@ -117,7 +118,7 @@ pub enum Space<'cfg> {
 #[non_exhaustive]
 pub enum Comment<'cfg> {
     #[non_exhaustive]
-    Tag { value: TextSlice<'cfg> },
+    Tag { slice: TextSlice<'cfg> },
 }
 
 impl<'cfg> BuildContext<'_, 'cfg> {
@@ -132,8 +133,8 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(Node {
             range,
             node_type: NodeType::TextLike {
-                value: TextLike::Text {
-                    value: Text {
+                text_like: TextLike::Text {
+                    text: Text {
                         slice: self.escapable_slice(range, unescape_in)?,
                         unescape_in,
                         escape_out,
@@ -172,8 +173,8 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(Node {
             range: outer_range,
             node_type: NodeType::TextLike {
-                value: TextLike::Text {
-                    value: Text {
+                text_like: TextLike::Text {
+                    text: Text {
                         slice: self.slice(content_range),
                         unescape_in: false,
                         escape_out: raw.is_none(),
@@ -217,9 +218,9 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(Node {
             range,
             node_type: NodeType::TextLike {
-                value: TextLike::Comment {
-                    value: Comment::Tag {
-                        value: self.slice(inner),
+                text_like: TextLike::Comment {
+                    comment: Comment::Tag {
+                        slice: self.slice(inner),
                     },
                 },
             },
@@ -230,8 +231,8 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(Node {
             range,
             node_type: NodeType::TextLike {
-                value: TextLike::Space {
-                    value: Space::Inline {
+                text_like: TextLike::Space {
+                    space: Space::Inline {
                         slice: Some(self.slice(range)),
                     },
                 },
@@ -275,8 +276,8 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(Node {
             range: range.unwrap_or(LocationRange::INVALID),
             node_type: NodeType::TextLike {
-                value: TextLike::Space {
-                    value: Space::Inline { slice: None },
+                text_like: TextLike::Space {
+                    space: Space::Inline { slice: None },
                 },
             },
         })

@@ -431,10 +431,10 @@ where
         is_last: bool,
     ) -> OutputResult {
         let out = match &node.node_type {
-            NodeType::Element { value } => self.process_element(value)?,
-            NodeType::TextLike { value } => match value {
-                TextLike::Text { value: text } if text.slice.is_empty() => {}
-                TextLike::Text { value: text } => {
+            NodeType::Element { element } => self.process_element(element)?,
+            NodeType::TextLike { text_like } => match text_like {
+                TextLike::Text { text } if text.slice.is_empty() => {}
+                TextLike::Text { text } => {
                     let is_raw = text.raw || !self.is_xml() && (!text.escape_out || self.is_raw());
                     let slice = self.slice(&text.slice);
 
@@ -459,7 +459,7 @@ where
                     self.follows_space = last_line.ends_with([' ', '\t']);
                 }
                 TextLike::Comment {
-                    value: Comment::Tag { value },
+                    comment: Comment::Tag { slice: value },
                 } => {
                     self.out.write_str("<!--")?;
                     self.write_comment_body(self.slice(value))?;
@@ -467,7 +467,7 @@ where
                     self.follows_space = false;
                 }
                 TextLike::Space { .. } if is_first || is_last => {}
-                TextLike::Space { value: space } => {
+                TextLike::Space { space } => {
                     self.space(space)?;
                     self.follows_space = true
                 }

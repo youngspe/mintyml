@@ -11,8 +11,7 @@ use self::apply_special_tags::apply_special_tags;
 
 mod apply_special_tags;
 mod complete_page;
-// TODO: restore this
-// mod metadata;
+mod metadata;
 
 struct TransformError;
 type TransformResult<T = ()> = Result<T, TransformError>;
@@ -22,7 +21,7 @@ fn apply_lang<'src>(document: &mut Document<'src>, lang: &Option<Cow<'src, str>>
     if let Some(ref lang) = lang {
         for node in &mut document.content.nodes {
             if let NodeType::Element {
-                value: Element { selectors, .. },
+                element: Element { selectors, .. },
             } = &mut node.node_type
             {
                 if let Some(selector) = selectors.iter_mut().find(|s| !s.uninferred()) {
@@ -48,7 +47,7 @@ fn apply_lang<'src>(document: &mut Document<'src>, lang: &Option<Cow<'src, str>>
 
 pub fn transform_document<'cfg>(
     mut document: Document<'cfg>,
-    src: &str,
+    src: &'cfg str,
     config: &OutputConfig<'cfg>,
     errors: &mut Errors,
 ) -> InternalResult<Document<'cfg>> {
@@ -58,10 +57,11 @@ pub fn transform_document<'cfg>(
         document = complete_page::complete_page(document, src)?;
     }
 
-    // TODO: restore this:
-    // if let Some(ref metadata) = config.metadata {
-    //     transform::metadata::add_metadata(&mut document, metadata);
-    // }
+    crate::inference::engine::infer(src, &mut document.content);
+
+    if let Some(ref metadata) = config.metadata {
+        document = metadata::add_metadata(document, metadata)?;
+    }
 
     apply_lang(&mut document, &config.lang);
     Ok(document)

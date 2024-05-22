@@ -48,8 +48,8 @@ impl<'cfg> TransformContext<'_, 'cfg> {
 
     fn transform_node(&mut self, mut node: Node<'cfg>) -> InternalResult<Node<'cfg>> {
         node.node_type = match node.node_type {
-            NodeType::Element { value } => NodeType::Element {
-                value: self.transform_element(value)?,
+            NodeType::Element { element: value } => NodeType::Element {
+                element: self.transform_element(value)?,
             },
             node_type @ NodeType::TextLike { .. } => node_type,
         };

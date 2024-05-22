@@ -201,7 +201,7 @@ impl<'cfg> From<Element<'cfg>> for Node<'cfg> {
     fn from(value: Element<'cfg>) -> Self {
         Node {
             range: value.range,
-            node_type: NodeType::Element { value },
+            node_type: NodeType::Element { element: value },
         }
     }
 }

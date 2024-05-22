@@ -31,7 +31,7 @@ pub struct Node<'cfg> {
 impl<'cfg> Node<'cfg> {
     pub fn item_type(&self) -> ItemType {
         match self.node_type {
-            NodeType::Element { ref value } => match value.element_type {
+            NodeType::Element { element: ref value } => match value.element_type {
                 ElementType::Paragraph {} => ItemType::Paragraph {},
                 ElementType::Standard { .. } => ItemType::Element {},
                 ElementType::Inline { .. } => ItemType::InlineElement {},
@@ -39,7 +39,7 @@ impl<'cfg> Node<'cfg> {
                 ElementType::Multiline { .. } => ItemType::Multiline {},
                 ElementType::Unknown { .. } => ItemType::Unknown {},
             },
-            NodeType::TextLike { ref value } => match value {
+            NodeType::TextLike { ref text_like } => match text_like {
                 TextLike::Text { .. } => ItemType::Text {},
                 TextLike::Comment { .. } => ItemType::Comment {},
                 TextLike::Space { .. } => ItemType::Space {},
@@ -49,14 +49,14 @@ impl<'cfg> Node<'cfg> {
 
     pub fn as_element(&self) -> Option<&Element<'cfg>> {
         match &self.node_type {
-            NodeType::Element { value } => Some(value),
+            NodeType::Element { element: value } => Some(value),
             NodeType::TextLike { .. } => None,
         }
     }
 
     pub fn as_element_mut(&mut self) -> Option<&mut Element<'cfg>> {
         match &mut self.node_type {
-            NodeType::Element { value } => Some(value),
+            NodeType::Element { element: value } => Some(value),
             NodeType::TextLike { .. } => None,
         }
     }
@@ -66,7 +66,7 @@ impl<'cfg> Node<'cfg> {
         !matches!(
             self.node_type,
             NodeType::TextLike {
-                value: TextLike::Comment { .. } | TextLike::Space { .. },
+                text_like: TextLike::Comment { .. } | TextLike::Space { .. },
             }
         )
     }
@@ -75,9 +75,9 @@ impl<'cfg> Node<'cfg> {
 #[non_exhaustive]
 pub enum NodeType<'cfg> {
     #[non_exhaustive]
-    Element { value: Element<'cfg> },
+    Element { element: Element<'cfg> },
     #[non_exhaustive]
-    TextLike { value: TextLike<'cfg> },
+    TextLike { text_like: TextLike<'cfg> },
 }
 
 pub struct Content<'cfg> {
@@ -207,7 +207,7 @@ impl<'cfg> BuildContext<'_, 'cfg> {
 
         // - The last node is an element
         let NodeType::Element {
-            value: ref mut last_element,
+            element: ref mut last_element,
         } = last_node.node_type
         else {
             return Ok(());
