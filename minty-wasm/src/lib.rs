@@ -5,56 +5,76 @@ extern crate wasm_bindgen;
 
 use alloc::{format, string::String};
 use js_sys::{JsString, Reflect};
-use mintyml::{ConvertError, MetadataConfig, OutputConfig};
+use mintyml::{error::LocationRange, ConvertError, MetadataConfig, OutputConfig};
 use wasm_bindgen::prelude::*;
 
 fn to_js_error(e: ConvertError) -> JsValue {
+    struct Context {
+        message_key: JsString,
+        actual_key: JsString,
+        start_key: JsString,
+        end_key: JsString,
+        expected_key: JsString,
+    }
+
+    let cx = Context {
+        message_key: JsString::from("message"),
+        actual_key: JsString::from("actual"),
+        start_key: JsString::from("start"),
+        end_key: JsString::from("end"),
+        expected_key: JsString::from("expected"),
+    };
+
+    let error = js_sys::Object::new();
+
+    fn process_error(
+        obj: &js_sys::Object,
+        range: LocationRange,
+        message: impl core::fmt::Display,
+        cx: &Context,
+    ) {
+        let _ = Reflect::set(obj, &cx.start_key, &range.start.position.into());
+        let _ = Reflect::set(obj, &cx.end_key, &range.end.position.into());
+        let _ = Reflect::set(obj, &cx.message_key, &format!("{message}").into());
+    }
+
     match e {
         ConvertError::Syntax { syntax_errors, src } => {
-            let error = js_sys::Object::new();
-            let message_key = JsString::from("message");
-            let actual_key = JsString::from("actual");
-            let start_key = JsString::from("start");
-            let end_key = JsString::from("end");
-            let expected_key = JsString::from("expected");
-
             let errors = syntax_errors
                 .into_iter()
                 .map(|e| {
                     let obj = js_sys::Object::new();
-                    let _ = Reflect::set(
+                    let range = e.range;
+                    process_error(
                         &obj,
-                        &actual_key,
-                        &src.get(e.range.start.position..e.range.end.position)
-                            .unwrap_or("<end-of-file>")
-                            .into(),
+                        range,
+                        e.display_with_src(&src, &Default::default()),
+                        &cx,
                     );
-                    let _ = Reflect::set(&obj, &start_key, &e.range.start.position.into());
-                    let _ = Reflect::set(&obj, &end_key, &e.range.end.position.into());
 
                     match e.kind {
-                        mintyml::SyntaxErrorKind::InvalidEscape { .. } => {
-                            let _ =
-                                Reflect::set(&obj, &message_key, &"Invalid escape sequence".into());
-                        }
-                        mintyml::SyntaxErrorKind::Unclosed { .. } => {
-                            let _ =
-                                Reflect::set(&obj, &message_key, &"Unclosed delimiter".into());
-                        }
                         mintyml::SyntaxErrorKind::ParseFailed { expected, .. } => {
-                            let _ = Reflect::set(&obj, &message_key, &"Parsing failed".into());
+                            if range != LocationRange::INVALID {
+                                let _ = Reflect::set(
+                                    &obj,
+                                    &cx.actual_key,
+                                    &if range.start.position >= src.len() {
+                                        "<end-of-file>".into()
+                                    } else {
+                                        range.slice(&src).into()
+                                    },
+                                );
+                            }
                             let _ = Reflect::set(
                                 &obj,
-                                &expected_key,
+                                &cx.expected_key,
                                 &expected
                                     .into_iter()
                                     .map(|ex| JsString::from(format!("{ex}")))
                                     .collect::<js_sys::Array>(),
                             );
                         }
-                        _ => {
-                            let _ = Reflect::set(&obj, &message_key, &"Unknown error".into());
-                        }
+                        _ => (),
                     }
                     obj
                 })
@@ -62,7 +82,29 @@ fn to_js_error(e: ConvertError) -> JsValue {
             let _ = Reflect::set(&error, &"syntaxErrors".into(), &errors);
             error.into()
         }
-        _ => js_sys::Error::new("Unknown error").into(),
+
+        ConvertError::Semantic {
+            semantic_errors,
+            src,
+        } => {
+            let errors = semantic_errors
+                .into_iter()
+                .map(|e| {
+                    let obj = js_sys::Object::new();
+                    let range = e.range;
+                    process_error(
+                        &obj,
+                        range,
+                        e.display_with_src(&src, &Default::default()),
+                        &cx,
+                    );
+                    obj
+                })
+                .collect::<js_sys::Array>();
+            let _ = Reflect::set(&error, &"syntaxErrors".into(), &errors);
+            error.into()
+        }
+        e => js_sys::Error::new(&format!("{e}")).into(),
     }
 }
 

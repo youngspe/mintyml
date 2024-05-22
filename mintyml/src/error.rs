@@ -3,7 +3,7 @@ use core::fmt::{self, Display};
 use alloc::{borrow::Cow, vec::Vec};
 
 use derive_more::Display;
-use gramma::{parse::LocationRange, ParseError};
+use gramma::{error::ExpectedParse, ParseError};
 
 use crate::{
     document::SpecialKind,
@@ -12,6 +12,8 @@ use crate::{
     utils::{default, join_display, DisplayFn},
     OutputConfig, Src,
 };
+
+pub use gramma::parse::{Location, LocationRange};
 
 /// Represents a syntax error in the MinTyML source.
 #[non_exhaustive]
@@ -37,10 +39,12 @@ impl fmt::Debug for SyntaxError {
 }
 
 impl SyntaxError {
-    pub(crate) fn display_with_src<'data>(
+    pub fn display_with_src<'data>(
         &'data self,
         src: &'data str,
+        options: &DisplayWithSrcOptions,
     ) -> impl fmt::Display + 'data {
+        let show_location = options.show_location;
         DisplayFn(move |f| {
             let mut inner = |sample| {
                 match &self.kind {
@@ -60,9 +64,11 @@ impl SyntaxError {
                     kind => write!(f, "{kind}"),
                 }?;
 
-                write!(f, " at character {}", self.range.start.position)?;
-                if self.range.end > self.range.start {
-                    write!(f, "..<{}", self.range.end.position)?;
+                if show_location {
+                    write!(f, " at character {}", self.range.start.position)?;
+                    if self.range.end > self.range.start {
+                        write!(f, "..<{}", self.range.end.position)?;
+                    }
                 }
                 Ok(())
             };
@@ -96,9 +102,7 @@ pub enum SyntaxErrorKind {
         fmt = "Expected {}",
         r#"join_display(expected.iter().map(|t| t.name()), " | ")"#
     )]
-    ParseFailed {
-        expected: Vec<gramma::error::ExpectedParse>,
-    },
+    ParseFailed { expected: Vec<ExpectedParse> },
     /// An opening delimiter does not have an accompanying closing delimiter.
     #[non_exhaustive]
     #[display(fmt = "Unclosed {} delimiter", delimiter)]
@@ -289,7 +293,7 @@ pub enum ConvertError<'src> {
     /// The conversion failed due to one or more syntax errors.
     #[display(
         fmt = "{}",
-        r#"crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")"#,
+        r#"crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src, &default())), "; ")"#,
     )]
     Syntax {
         syntax_errors: Vec<SyntaxError>,
@@ -298,7 +302,7 @@ pub enum ConvertError<'src> {
     /// The conversion failed due to one or more semantic errors.
     #[display(
         fmt = "{}",
-        r#"crate::utils::join_display(semantic_errors.iter().map(|x| x.display_with_src(src)), "; ")"#,
+        r#"crate::utils::join_display(semantic_errors.iter().map(|x| x.display_with_src(src, &default())), "; ")"#,
     )]
     Semantic {
         semantic_errors: Vec<SemanticError>,
@@ -365,10 +369,17 @@ pub enum SemanticErrorKind {
     Unknown,
 }
 
+#[non_exhaustive]
+#[derive(Default)]
+pub struct DisplayWithSrcOptions {
+    pub show_location: bool,
+}
+
 impl SemanticError {
-    pub(crate) fn display_with_src<'data>(
+    pub fn display_with_src<'data>(
         &'data self,
         _src: &'data str,
+        _options: &DisplayWithSrcOptions,
     ) -> impl fmt::Display + 'data {
         DisplayFn(move |f| match self.kind {
             ref kind => write!(f, "{kind}"),
