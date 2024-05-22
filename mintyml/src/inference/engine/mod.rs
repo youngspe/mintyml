@@ -15,6 +15,8 @@ use crate::{
     utils::default,
 };
 
+use self::when::*;
+
 use super::definitions::StandardInfer;
 
 mod sealed {
@@ -84,7 +86,7 @@ pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
         })
     }
     fn default<M>(self, value: impl IntoTags<'cfg, M>) -> Self::Append<impl TagDefinition<'cfg>> {
-        self.when(when::any(), value)
+        self.when(line() | block() | paragraph(), value)
     }
 }
 pub trait MethodDefinition<'cfg, _Bound = &'cfg Self>:
@@ -112,7 +114,7 @@ pub trait MethodDefinition<'cfg, _Bound = &'cfg Self>:
     }
 
     fn default<M>(self, value: impl IntoInferenceMethod<'cfg, M>) -> impl MethodDefinition<'cfg> {
-        self.when(when::any(), value)
+        self.when(line() | block() | paragraph(), value)
     }
 }
 

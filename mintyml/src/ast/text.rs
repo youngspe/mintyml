@@ -66,18 +66,50 @@ gramma::define_token!(
     pub struct VerbatimTail2;
 
     #[pattern(matcher = {
-        exactly("\"\"\"") + (!char("\n\"")).repeat(..).simple() + char("\n")
-        + char(..).repeat(..).lazy()
-        + line_start() + char(" \t").repeat(..).simple() + exactly("\"\"\"")
+        exactly("'''") + (!char("\n`")).repeat(..).simple() + line_end()
     })]
-    pub struct MultilineEscaped;
+    pub struct MultilineUnescapedOpen;
+    #[pattern(matcher = {
+        char(..).repeat(1..).lazy() + (
+            src_end()
+            | precedes(exactly("'''"))
+            + follows(line_start() + char("\t ").repeat(..).simple())
+        )
+    })]
+    pub struct MultilineUnescapedBody;
+    #[pattern(matcher = exactly("'''") + !char('\''))]
+    pub struct MultilineUnescapedClose;
 
     #[pattern(matcher = {
-        exactly("'''") + (!char("\n'")).repeat(..).simple() + char("\n")
-        + char(..).repeat(..).lazy()
-        + line_start() + char(" \t").repeat(..).simple() + exactly("'''")
+        exactly("\"\"\"") + (!char("\n`")).repeat(..).simple() + line_end()
     })]
-    pub struct MultilineUnescaped;
+    pub struct MultilineEscapedOpen;
+    #[pattern(matcher = {
+        char(..).repeat(1..).lazy() + (
+            src_end()
+            | precedes(exactly("\"\"\""))
+            + follows(line_start() + char("\t ").repeat(..).simple())
+        )
+    })]
+    pub struct MultilineEscapedBody;
+    #[pattern(matcher = exactly("\"\"\"") + !char('"'))]
+    pub struct MultilineEscapedClose;
+
+    #[pattern(matcher = {
+        exactly("```") + (!char("\n`")).repeat(..).simple() + line_end()
+    })]
+    pub struct MultilineCodeOpen;
+    #[pattern(matcher = {
+        char(..).repeat(1..).lazy() + (
+            src_end()
+            | precedes(exactly("```"))
+            + follows(line_start() + char("\t ").repeat(..).simple())
+        )
+    })]
+    pub struct MultilineCodeBody;
+    #[pattern(matcher = exactly("```") + !char('`'))]
+    pub struct MultilineCodeClose;
+
     #[pattern(matcher = interpolation())]
     pub struct Interpolation;
 
@@ -115,8 +147,27 @@ gramma::define_rule!(
     }
 
     pub enum Multiline {
-        Escaped { value: MultilineEscaped },
-        Unescaped { value: MultilineUnescaped },
+        Escaped {
+            open: MultilineEscapedOpen,
+            start: Location,
+            body: MultilineEscapedBody,
+            end: Location,
+            close: MultilineEscapedClose,
+        },
+        Unescaped {
+            open: MultilineUnescapedOpen,
+            start: Location,
+            body: MultilineUnescapedBody,
+            end: Location,
+            close: MultilineUnescapedClose,
+        },
+        Code {
+            open: MultilineCodeOpen,
+            start: Location,
+            body: MultilineCodeBody,
+            end: Location,
+            close: MultilineCodeClose,
+        },
     }
 
     pub struct Comment {

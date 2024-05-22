@@ -1,7 +1,9 @@
 use alloc::borrow::Cow;
 
 use crate::{
-    document::{Content, Document, Element, ElementType, Node, NodeType, SpecialKind},
+    document::{
+        Content, Document, Element, ElementType, MultilineKind, Node, NodeType, SpecialKind,
+    },
     error::{Errors, InternalResult},
     OutputConfig,
 };
@@ -55,10 +57,21 @@ impl<'cfg> TransformContext<'_, 'cfg> {
     }
 
     fn transform_element(&mut self, mut element: Element<'cfg>) -> InternalResult<Element<'cfg>> {
-        if let ElementType::Special { ref kind } = element.element_type {
-            let tag_name = self.tag_name(kind)?;
-            element.apply_tags([tag_name.into()]);
+        match element.element_type {
+            ElementType::Special { ref kind } => {
+                let tag_name = self.tag_name(kind)?;
+                element.apply_tags([tag_name.into()]);
+            }
+            ElementType::Multiline {
+                kind: MultilineKind::Code { .. },
+            } => {
+                let outer_tag = self.tag_name(&SpecialKind::CodeBlockContainer)?;
+                let inner_tag = self.tag_name(&SpecialKind::Code)?;
+                element.apply_tags([outer_tag.into(), inner_tag.into()]);
+            }
+            _ => (),
         }
+
         element.content = self.transform_content(element.content)?;
         Ok(element)
     }

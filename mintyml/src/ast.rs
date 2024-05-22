@@ -21,6 +21,7 @@ gramma::define_rule!(
     }
 
     pub enum NodeType {
+        Multiline { multiline: Multiline },
         Text { text: InlineText },
         Selector { selector: Selector },
         Element { element: Element },
@@ -76,6 +77,10 @@ mod test {
     #[test]
     fn text_segment_cannot_start_with_whitespace() {
         assert!(TextSegment::try_lex(" foo", Location { position: 0 }).is_none());
+    }
+
+    #[test]
+    fn text_segment_can_start_after_whitespace() {
         assert_eq!(
             TextSegment::try_lex(" foo", Location { position: 1 }).unwrap(),
             LocationRange {
@@ -263,10 +268,17 @@ section {
     }
 
     #[track_caller]
-    pub fn parse_as_vec<R: gramma::Rule>(src: &str) -> R {
-        let ast_vec = gramma::parse_tree::<Vec<R>, LOOKAHEAD>(src).unwrap();
+    pub fn parse_as_vec_before<R: gramma::Rule, Post: gramma::Rule>(src: &str) -> R {
+        let ast_vec = gramma::parse_tree::<(Vec<R>, Post), LOOKAHEAD>(src)
+            .unwrap()
+            .0;
         assert_eq!(ast_vec.len(), 1);
         ast_vec.into_iter().next().unwrap()
+    }
+
+    #[track_caller]
+    pub fn parse_as_vec<R: gramma::Rule>(src: &str) -> R {
+        parse_as_vec_before::<R, ()>(src)
     }
 
     #[test]

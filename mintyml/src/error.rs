@@ -175,6 +175,9 @@ pub enum ItemType {
     #[display(fmt = "inline element")]
     InlineElement {},
     #[non_exhaustive]
+    #[display(fmt = "multiline text")]
+    Multiline {},
+    #[non_exhaustive]
     #[display(fmt = "comment")]
     Comment {},
     #[non_exhaustive]
@@ -194,6 +197,7 @@ impl ItemType {
             ItemType::Text {} => &[ItemType::Text {}],
             ItemType::InlineElement {} => &[ItemType::InlineElement {}],
             ItemType::Comment {} => &[ItemType::Comment {}],
+            ItemType::Multiline {} => &[ItemType::Multiline {}],
             ItemType::Space {} => &[ItemType::Space {}],
             ItemType::Unknown {} => &[ItemType::Unknown {}],
         }

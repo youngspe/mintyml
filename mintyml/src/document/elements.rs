@@ -34,6 +34,8 @@ pub enum ElementType {
     Inline { delimiter: Option<ElementDelimiter> },
     #[non_exhaustive]
     Special { kind: SpecialKind },
+    #[non_exhaustive]
+    Multiline { kind: MultilineKind },
 }
 
 impl From<SpecialKind> for ElementType {
@@ -112,6 +114,7 @@ impl<'cfg> Element<'cfg> {
                     delimiter: ElementDelimiter::Line { .. }
                 } | ElementType::Inline { .. }
                     | ElementType::Special { .. }
+                    | ElementType::Paragraph { .. }
             )
     }
 
@@ -167,6 +170,21 @@ pub enum SpecialKind {
     /// `pre>code>`
     #[display(fmt = "code block")]
     CodeBlockContainer,
+}
+
+/// The type of a multiline text block.
+#[non_exhaustive]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MultilineKind {
+    /// Double quotes
+    #[non_exhaustive]
+    Escaped {},
+    /// Single quotes
+    #[non_exhaustive]
+    Unescaped {},
+    /// Backticks
+    #[non_exhaustive]
+    Code {},
 }
 
 impl<'cfg> From<Element<'cfg>> for Node<'cfg> {
@@ -317,14 +335,54 @@ impl<'cfg> BuildContext<'_, 'cfg> {
             ast::Element::Block { value } => {
                 out_nodes.push(self.build_block(range, value, true)?.into())
             }
-            ast::Element::MultilineCode { value } => {
-                let _ = value;
-                todo!()
-            }
             ast::Element::Inline { value } => self.build_inline(range, value, out_nodes)?,
             ast::Element::InlineSpecial { value } => {
                 out_nodes.push(self.build_inline_special(range, value)?.into())
             }
         })
+    }
+
+    pub fn build_multiline(
+        &mut self,
+        range: LocationRange,
+        ast: &ast::Multiline,
+        out_nodes: &mut Vec<Node<'cfg>>,
+    ) -> BuildResult {
+        use ast::Multiline::*;
+
+        let (Escaped { start, end, .. } | Unescaped { start, end, .. } | Code { start, end, .. }) =
+            *ast;
+
+        let kind = match ast {
+            Escaped { .. } => MultilineKind::Escaped {},
+            Unescaped { .. } => MultilineKind::Unescaped {},
+            Code { .. } => MultilineKind::Code {},
+        };
+
+        let unescape_in = match kind {
+            MultilineKind::Escaped {} => true,
+            MultilineKind::Unescaped {} | MultilineKind::Code {} => false,
+        };
+
+        let inner_range = LocationRange { start, end };
+
+        out_nodes.push(
+            Element {
+                content: Content {
+                    range: inner_range,
+                    nodes: vec![self.build_text_node(
+                        inner_range,
+                        unescape_in,
+                        true,
+                        false,
+                        true,
+                    )?],
+                },
+                ..Element::new(range, ElementType::Multiline { kind })
+            }
+            .into(),
+        );
+
+        Ok(())
     }
 }

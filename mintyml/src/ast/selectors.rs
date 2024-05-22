@@ -36,7 +36,6 @@ gramma::define_string_pattern!(
         char(" \t").repeat(..).simple()
             + (char('>') | char('{') + !precedes(!(whitespace() | char('}'))))
             | char('[')
-            | src_end()
     }
 );
 
@@ -150,28 +149,32 @@ gramma::define_rule!(
 
 #[cfg(test)]
 mod test {
+    use crate::ast::test::parse_as_vec_before;
+
     use super::*;
 
     #[test]
     fn selector_example() {
-        gramma::parse_tree::<Selector, 1>("a.b#c[x].b").unwrap();
+        gramma::parse_tree::<(Selector, RightAngle), 1>("a.b#c[x].b>").unwrap();
     }
 
     #[test]
     fn selector_empty_repeated() {
-        gramma::parse_tree::<Vec<Selector>, 1>("").unwrap();
+        gramma::parse_tree::<(Vec<Selector>, RightAngle), 1>(">").unwrap();
     }
 
     #[test]
     fn selector_example_repeated() {
-        super::super::test::parse_as_vec::<Selector>("a.b#c[x].b");
+        parse_as_vec_before::<Selector, RightAngle>("a.b#c[x].b>");
     }
 
     /// Test that in invalid selector parses correctly so we can report it as an error later.
     #[test]
     fn invalid_selector() {
-        let src = "a.b#c[x]d.e";
-        let selector = gramma::parse_tree::<Selector, 1>(src).unwrap();
+        let src = "a.b#c[x]d.e>";
+        let selector = gramma::parse_tree::<(Selector, RightAngle), 1>(src)
+            .unwrap()
+            .0;
 
         let SelectorSegment::ClassLike { ref items } = selector.segments[1] else {
             panic!();

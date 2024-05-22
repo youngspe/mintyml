@@ -34,13 +34,6 @@ gramma::define_token!(
         exactly("<`") + char(..).repeat(..).lazy() + exactly("`>")
     })]
     pub struct InlineCode;
-
-    #[pattern(matcher = {
-        exactly("```") + (!char("\n`")).repeat(..).simple() + char("\n")
-        + char(..).repeat(..).lazy()
-        + line_start() + char(" \t").repeat(..).simple() + exactly("```")
-    })]
-    pub struct MultilineCode;
 );
 
 gramma::define_rule!(
@@ -104,8 +97,6 @@ gramma::define_rule!(
         },
         #[non_exhaustive]
         Block { value: Block },
-        #[non_exhaustive]
-        MultilineCode { value: MultilineCode },
         #[non_exhaustive]
         Inline { value: Inline },
         #[non_exhaustive]
