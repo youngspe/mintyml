@@ -121,6 +121,7 @@ impl<'cfg> Element<'cfg> {
                 } | ElementType::Inline { .. }
                     | ElementType::Special { .. }
                     | ElementType::Paragraph { .. }
+                    | ElementType::Multiline { .. }
             )
     }
 

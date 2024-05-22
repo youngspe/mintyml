@@ -70,6 +70,15 @@ impl<'cfg> Node<'cfg> {
             }
         )
     }
+
+    pub fn is_space(&self) -> bool {
+        matches!(
+            self.node_type,
+            NodeType::TextLike {
+                text_like: TextLike::Space { .. },
+            }
+        )
+    }
 }
 
 #[non_exhaustive]

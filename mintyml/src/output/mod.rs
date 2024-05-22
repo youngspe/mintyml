@@ -424,12 +424,7 @@ where
         })
     }
 
-    fn process_node(
-        &mut self,
-        node: &'cx Node<'cfg>,
-        is_first: bool,
-        is_last: bool,
-    ) -> OutputResult {
+    fn process_node(&mut self, node: &'cx Node<'cfg>) -> OutputResult {
         let out = match &node.node_type {
             NodeType::Element { element } => self.process_element(element)?,
             NodeType::TextLike { text_like } => match text_like {
@@ -466,7 +461,6 @@ where
                     self.out.write_str("-->")?;
                     self.follows_space = false;
                 }
-                TextLike::Space { .. } if is_first || is_last => {}
                 TextLike::Space { space } => {
                     self.space(space)?;
                     self.follows_space = true
@@ -478,11 +472,17 @@ where
     }
 
     fn process_content(&mut self, content: &'cx Content<'cfg>) -> OutputResult {
-        content.nodes.iter().enumerate().try_for_each(|(i, node)| {
-            let is_first = i == 0;
-            let is_last = i == content.nodes.len() - 1;
-            self.process_node(node, is_first, is_last)
-        })
+        // Trim off leading and trailing space
+        let Some(first) = content.nodes.iter().position(|n| !n.is_space()) else {
+            return Ok(());
+        };
+        let Some(last) = content.nodes.iter().rposition(|n| !n.is_space()) else {
+            return Ok(());
+        };
+
+        content.nodes[first..=last]
+            .iter()
+            .try_for_each(|node| self.process_node(node))
     }
 }
 
