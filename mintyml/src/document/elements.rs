@@ -1,3 +1,5 @@
+mod into_tags;
+
 use core::mem;
 
 use alloc::{vec, vec::Vec};
@@ -8,6 +10,8 @@ use gramma::parse::LocationRange;
 use crate::{ast, error::UnclosedDelimiterKind, utils::default};
 
 use super::{BuildContext, BuildResult, Content, Node, NodeType, Selector, TextSlice};
+
+pub use self::into_tags::IntoTags;
 
 #[non_exhaustive]
 #[derive(Clone, Copy)]
@@ -36,6 +40,8 @@ pub enum ElementType {
     Special { kind: SpecialKind },
     #[non_exhaustive]
     Multiline { kind: MultilineKind },
+    #[non_exhaustive]
+    Unknown {},
 }
 
 impl From<SpecialKind> for ElementType {
@@ -142,6 +148,10 @@ impl<'cfg> Element<'cfg> {
             1..1,
             tags.map(|t| Selector::empty(selector_location).with_tag(t)),
         );
+    }
+    pub fn with_tag<M>(mut self, tags: impl IntoTags<'cfg, M>) -> Self {
+        self.apply_tags(tags.tags());
+        self
     }
 }
 

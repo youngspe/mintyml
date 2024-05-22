@@ -162,7 +162,7 @@ fn convert_to_internal<'src>(
 
     let (Ok(()) | Err(InternalError)) = (|| {
         let mut document = Document::parse(src, &mut errors)?;
-        document = transform::transform_document(document, config, &mut errors)?;
+        document = transform::transform_document(document, src, config, &mut errors)?;
         inference::engine::infer(src, &mut document.content);
 
         if errors.is_empty() || forgive {

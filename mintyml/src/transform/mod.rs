@@ -10,8 +10,8 @@ use crate::{
 use self::apply_special_tags::apply_special_tags;
 
 mod apply_special_tags;
+mod complete_page;
 // TODO: restore this
-// mod complete_page;
 // mod metadata;
 
 struct TransformError;
@@ -48,19 +48,17 @@ fn apply_lang<'src>(document: &mut Document<'src>, lang: &Option<Cow<'src, str>>
 
 pub fn transform_document<'cfg>(
     mut document: Document<'cfg>,
+    src: &str,
     config: &OutputConfig<'cfg>,
     errors: &mut Errors,
 ) -> InternalResult<Document<'cfg>> {
     document = apply_special_tags(document, config, errors)?;
 
+    if config.complete_page.unwrap_or(false) {
+        document = complete_page::complete_page(document, src)?;
+    }
+
     // TODO: restore this:
-    // if config.complete_page.unwrap_or(false) {
-    //     transform::complete_page::complete_page(&mut document, &config);
-    // }
-
-    // transform::infer_elements::infer_elements(&mut document, &config.special_tags);
-    // transform::apply_lang(&mut document, &config.lang);
-
     // if let Some(ref metadata) = config.metadata {
     //     transform::metadata::add_metadata(&mut document, metadata);
     // }

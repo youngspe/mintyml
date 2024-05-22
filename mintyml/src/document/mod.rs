@@ -37,6 +37,7 @@ impl<'cfg> Node<'cfg> {
                 ElementType::Inline { .. } => ItemType::InlineElement {},
                 ElementType::Special { .. } => ItemType::InlineElement {},
                 ElementType::Multiline { .. } => ItemType::Multiline {},
+                ElementType::Unknown { .. } => ItemType::Unknown {},
             },
             NodeType::TextLike { ref value } => match value {
                 TextLike::Text { .. } => ItemType::Text {},

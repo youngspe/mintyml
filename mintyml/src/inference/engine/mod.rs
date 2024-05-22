@@ -5,13 +5,13 @@ use core::{
     fmt, mem,
 };
 
-use alloc::{borrow::Cow, rc::Rc, string::String, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 
 use derive_more::Add;
 use either::IntoEither;
 
 use crate::{
-    document::{Content, Element, Node, NodeType, Selector, TextSlice},
+    document::{Content, Element, IntoTags, Node, NodeType},
     utils::default,
 };
 
@@ -311,52 +311,6 @@ pub(crate) enum ChildInference<'cfg> {
     WithMethod(InferenceMethod<'cfg>),
 }
 
-#[non_exhaustive]
-pub struct InferenceTarget<'cfg, 'infer> {
-    src: &'cfg str,
-    element: &'infer mut Element<'cfg>,
-    child_inference: &'infer mut ChildInference<'cfg>,
-    needs_inference: bool,
-}
-
-pub trait IntoTags<'cfg, M = (), _Bound = &'cfg Self>: 'cfg {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg;
-}
-
-impl<'cfg, It: IntoIterator + 'cfg, M> IntoTags<'cfg, &'cfg [M]> for It
-where
-    It::Item: IntoTags<'cfg, M>,
-    It::IntoIter: Clone + 'cfg,
-{
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
-        self.into_iter().flat_map(IntoTags::tags)
-    }
-}
-
-impl<'cfg> IntoTags<'cfg> for TextSlice<'cfg> {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
-        core::iter::once(self)
-    }
-}
-
-impl<'cfg> IntoTags<'cfg> for Cow<'cfg, str> {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
-        core::iter::once(self.into())
-    }
-}
-
-impl<'cfg> IntoTags<'cfg> for String {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
-        core::iter::once(self.into())
-    }
-}
-
-impl<'cfg> IntoTags<'cfg> for &'cfg str {
-    fn tags(self) -> impl Iterator<Item = TextSlice<'cfg>> + Clone + 'cfg {
-        core::iter::once(self.into())
-    }
-}
-
 pub struct InferencePredicateContext<'cfg, 'infer> {
     src: &'cfg str,
     nodes: &'infer [Node<'cfg>],
@@ -415,57 +369,6 @@ pub trait InferencePredicate {
     fn test(&mut self, cx: &InferencePredicateContext) -> TestResult;
     fn direction_precedence(&self) -> DirectionPrecedence {
         default()
-    }
-}
-
-impl<'cfg, 'infer> InferenceTarget<'cfg, 'infer> {
-    pub fn tag<M>(&mut self, tag: impl IntoTags<'cfg, M>) -> &mut Self {
-        if self.needs_inference {
-            self.needs_inference = false;
-            let mut tags = tag.tags();
-
-            let Some(first) = tags.next() else {
-                if !self.element.selectors.is_empty() {
-                    self.element.selectors.remove(0);
-                }
-                return self;
-            };
-
-            let selector_location;
-
-            if let Some(selector) = self.element.selectors.first_mut() {
-                selector_location = selector.range.end;
-                selector.tag = first.into();
-            } else {
-                selector_location = self.element.range.start;
-                self.element
-                    .selectors
-                    .push(Selector::empty(selector_location).with_tag(first))
-            }
-
-            self.element.selectors.splice(
-                1..1,
-                tags.map(|t| Selector::empty(selector_location).with_tag(t)),
-            );
-        }
-        self
-    }
-
-    pub fn dissolve(&mut self) -> &mut Self {
-        self.tag(core::iter::empty::<TextSlice>())
-    }
-
-    pub fn inherit_inference(&mut self) -> &mut Self {
-        *self.child_inference = ChildInference::Continue;
-        self
-    }
-
-    pub fn inference_method<M>(
-        &mut self,
-        method: impl IntoInferenceMethod<'cfg, M> + 'cfg,
-    ) -> &mut Self {
-        *self.child_inference = ChildInference::WithMethod(method.into_inference_method());
-        self
     }
 }
 
