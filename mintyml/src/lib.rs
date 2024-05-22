@@ -5,86 +5,35 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
+extern crate derive_more;
 extern crate either;
 extern crate gramma;
-
-#[cfg(feature = "error-trait")]
-extern crate thiserror;
 
 pub(crate) mod ast;
 pub(crate) mod config;
 pub(crate) mod document;
+pub mod error;
 pub(crate) mod escape;
+pub(crate) mod inference;
 pub(crate) mod output;
 pub(crate) mod transform;
 pub(crate) mod utils;
 
-use alloc::string::String;
+use alloc::{borrow::Cow, string::String};
 use core::{borrow::Borrow, fmt};
+use error::{Errors, InternalError};
 
 use document::Document;
 use output::OutputError;
 
 pub use config::{MetadataConfig, OutputConfig, SpecialTagConfig};
 
+pub use error::ConvertError;
 #[deprecated]
 #[doc(hidden)]
-pub use document::{SyntaxError, SyntaxErrorKind};
-pub use error::ConvertError;
+pub use error::{SyntaxError, SyntaxErrorKind};
 
-pub mod error {
-    use core::fmt;
-
-    pub use crate::document::{SyntaxError, SyntaxErrorKind, UnclosedDelimiterKind};
-    use crate::{
-        document::{Src, ToStatic},
-        output::OutputError,
-    };
-
-    /// Represents an error that occurred while converting MinTyML.
-    #[non_exhaustive]
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    #[cfg_attr(feature = "error-trait", derive(thiserror::Error))]
-    pub enum ConvertError<'src> {
-        /// The conversion failed due to one or more syntax errors.
-        #[cfg_attr(feature = "error-trait", error("{}", crate::utils::join_display(syntax_errors.iter().map(|x| x.display_with_src(src)), "; ")))]
-        Syntax {
-            syntax_errors: alloc::vec::Vec<SyntaxError>,
-            src: Src<'src>,
-        },
-        /// The conversion failed for some other reason.
-        #[cfg_attr(feature = "error-trait", error("Unknown"))]
-        Unknown,
-    }
-
-    impl<'src> ConvertError<'src> {
-        /// Copies all borrowed data so the error can outlive the source str.
-        pub fn to_static(self) -> ConvertError<'static> {
-            match self {
-                ConvertError::Syntax { syntax_errors, src } => ConvertError::Syntax {
-                    syntax_errors,
-                    src: src.to_static(),
-                },
-                Self::Unknown => ConvertError::Unknown,
-            }
-        }
-    }
-
-    impl<'src> ToStatic for ConvertError<'src> {
-        type Static = ConvertError<'static>;
-        fn to_static(self) -> ConvertError<'static> {
-            self.to_static()
-        }
-    }
-
-    impl From<OutputError> for ConvertError<'_> {
-        fn from(value: OutputError) -> Self {
-            match value {
-                OutputError::WriteError(fmt::Error) => Self::Unknown,
-            }
-        }
-    }
-}
+type Src<'src> = Cow<'src, str>;
 
 /// Converts the given MinTyML string `src` using `config` for configuration options.
 /// If successful, returns a string containing the converted HTML document.
@@ -209,42 +158,22 @@ fn convert_to_internal<'src>(
     out: &mut impl fmt::Write,
     forgive: bool,
 ) -> Result<(), ConvertError<'src>> {
-    let config: &OutputConfig = config;
-    let (document, syntax_errors) = Document::parse_forgiving(src);
+    let mut errors = Errors::new(config);
 
-    let mut document = match (document, syntax_errors.is_empty(), config.fail_fast) {
-        (Some(d), true, _) | (Some(d), _, None | Some(false)) => d,
-        _ => {
-            return Err(ConvertError::Syntax {
-                syntax_errors,
-                src: src.into(),
-            })
+    let (Ok(()) | Err(InternalError)) = (|| {
+        let mut document = Document::parse(src, &mut errors)?;
+        document = transform::transform_document(document, src, config, &mut errors)?;
+
+        if errors.is_empty() || forgive {
+            output::output_html_to(src, &document, out, config)
+                .map_err(|e| match e {
+                    OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
+                })
+                .or_else(|_| errors.unknown())?;
         }
-    };
 
-    if config.complete_page.unwrap_or(false) {
-        transform::complete_page::complete_page(&mut document, &config);
-    }
+        Ok(())
+    })();
 
-    transform::infer_elements::infer_elements(&mut document, &config.special_tags);
-    transform::apply_lang(&mut document, &config.lang);
-
-    if let Some(ref metadata) = config.metadata {
-        transform::metadata::add_metadata(&mut document, metadata);
-    }
-
-    if syntax_errors.is_empty() || forgive {
-        output::output_html_to(&document, out, config).map_err(|e| match e {
-            OutputError::WriteError(fmt::Error) => ConvertError::Unknown,
-        })?;
-    }
-
-    if !syntax_errors.is_empty() {
-        return Err(ConvertError::Syntax {
-            syntax_errors,
-            src: src.into(),
-        });
-    }
-
-    Ok(())
+    errors.to_convert_error(src)
 }

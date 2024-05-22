@@ -220,5 +220,5 @@ fn unclosed_comment() {
         ],
     );
 
-    assert_eq!(out.unwrap(), "<p>foo <!--bar&NewLine;    baz&NewLine;    --></p>")
+    assert_eq!(out.unwrap(), "<p>foo <!--bar\n    baz\n    --></p>")
 }

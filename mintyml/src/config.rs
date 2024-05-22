@@ -1,4 +1,4 @@
-use crate::document::Src;
+use crate::Src;
 
 /// Defines overrides for the element types (or _tags_) inferred from special
 /// inline elements and code blocks.

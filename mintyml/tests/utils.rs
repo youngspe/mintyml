@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::fmt::{self, Write};
 
 use mintyml::{ConvertError, OutputConfig};
@@ -31,10 +32,7 @@ pub fn convert_unwrap(
 ) -> String {
     match convert_inner(src.as_ref(), cfg, false) {
         Ok(x) => x,
-        #[cfg(feature = "std")]
         Err((_, e)) => panic!("{e}"),
-        #[cfg(not(feature = "std"))]
-        Err((_, e)) => panic!("{e:?}"),
     }
 }
 
@@ -49,6 +47,7 @@ pub fn convert_fail(
     }
 }
 
+#[track_caller]
 pub fn match_set<T: fmt::Debug>(
     src: impl IntoIterator<Item = T>,
     mut matchers: Vec<(&mut dyn FnMut(&mut T) -> bool, &str)>,

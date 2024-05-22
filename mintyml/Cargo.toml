@@ -7,12 +7,10 @@ repository.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[dependencies.thiserror]
-version = "1.0.57"
+[dependencies.derive_more]
+version = "0.99.17"
 default-features = false
-optional = true
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+features = ["display", "add"]
 
 [dependencies.either]
 version = "1.9"
@@ -25,4 +23,4 @@ default-features = false
 [features]
 default = []
 std = ["gramma/std"]
-error-trait = ["std", "dep:thiserror"]
+error-trait = ["std", "derive_more/error"]
