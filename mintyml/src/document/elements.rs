@@ -96,8 +96,15 @@ impl<'cfg> Element<'cfg> {
             .map(|i| i + 1)
         {
             let new_selectors = self.selectors.split_off(uninferred_selector_index);
+            let selector_start = new_selectors[0].range.start;
+
+            let new_range = self.content.range.combine(LocationRange {
+                start: selector_start,
+                end: self.range.end,
+            });
+
             let new_element = Element {
-                range: self.range,
+                range: new_range,
                 selectors: new_selectors,
                 content: Content {
                     range: self.content.range,
@@ -107,6 +114,7 @@ impl<'cfg> Element<'cfg> {
                 format_inline: self.format_inline,
                 is_raw: self.is_raw,
             };
+            self.content.range = self.content.range.combine(new_range);
             self.content.nodes = vec![new_element.into()];
             self.format_inline = true;
         }

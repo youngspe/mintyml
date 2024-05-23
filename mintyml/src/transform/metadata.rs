@@ -188,8 +188,7 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                 }
                 range = outer_range;
             } else {
-                range = content_range.combine(selector.range);
-                range = range.combine(LocationRange {
+                range = content_range.combine(LocationRange {
                     start: selector.range.start,
                     end: outer_range.end,
                 });
