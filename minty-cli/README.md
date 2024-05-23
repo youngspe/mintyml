@@ -101,12 +101,15 @@ or install with [`cargo install mintyml-cli`](https://crates.io/crates/mintyml-c
               - code-block-container=...: ``` code block ``` (default: 'pre')
 
           --metadata[=<ENABLE>]
-              If enabled, parsing metadata will be added to the output
+              EXPERIMENTAL: If enabled, parsing metadata will be added to the output.
+              
+              See https://github.com/youngspe/mintyml/blob/main/documentation/general/metadata.md for
+              more information.
               
               [possible values: true, false]
 
           --metadata-elements[=<ENABLE>]
-              Generate elements for nodes that don't correspond directly to HTML elements, like comments
-              and text segments. Implies `--metadata`
+              EXPERIMENTAL: Generate elements for nodes that don't correspond directly to HTML elements,
+              like comments and text segments. Implies `--metadata`
               
               [possible values: true, false]

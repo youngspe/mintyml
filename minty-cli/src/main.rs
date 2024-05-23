@@ -135,7 +135,10 @@ struct ConvertOptions {
     )]
     special_tag: Vec<(SpecialTag, String)>,
 
-    /// If enabled, parsing metadata will be added to the output.
+    /// EXPERIMENTAL: If enabled, parsing metadata will be added to the output.
+    ///
+    /// See https://github.com/youngspe/mintyml/blob/main/documentation/general/metadata.md
+    /// for more information.
     #[arg(
         long, num_args = 0..=1, value_name = "ENABLE",
         require_equals = true, action = ArgAction::Set,
@@ -143,7 +146,7 @@ struct ConvertOptions {
     )]
     metadata: Option<bool>,
 
-    /// Generate elements for nodes that don't correspond directly to HTML elements,
+    /// EXPERIMENTAL: Generate elements for nodes that don't correspond directly to HTML elements,
     /// like comments and text segments.
     /// Implies `--metadata`
     #[arg(
