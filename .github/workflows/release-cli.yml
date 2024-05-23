@@ -1,0 +1,65 @@
+name: Release CLI
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+
+env:
+  TAG: "${{ inputs.tag || github.ref_name }}"
+
+concurrency:
+  group: "release"
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Publish CLI Release
+    runs-on: ubuntu-latest
+    steps:
+    - env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+      run: |
+        just new-release '${{ env.TAG }}'
+
+
+  build-assets:
+    needs: create-release
+    strategy:
+      matrix:
+        system:
+          - runner: ubuntu-latest
+            target-file: release-targets.txt
+            name: Linux, Windows
+          - runner: macos-latest
+            target-file: release-targets-apple.txt
+            name: macOS
+    runs-on: ${{ matrix.system.runner }}
+    name: Build CLI for ${{ matrix.system.name }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+    - uses: ./.github/actions/setup
+      with:
+        node: "false"
+    - uses: taiki-e/install-action@cross
+    - name: Build and upload assets
+      env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+      run: |
+        just update-release '${{ env.TAG }}' '${{ matrix.system.target-file }}'
+
+  publish-release:
+    name: Publish CLI Release
+    needs: 'build-assets'
+    runs-on: ubuntu-latest
+    steps:
+    - env:
+        GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
+      run: |
+        just publish-release '${{ env.TAG }}'
