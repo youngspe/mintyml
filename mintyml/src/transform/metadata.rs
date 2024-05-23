@@ -6,7 +6,7 @@ use crate::{
     config::MetadataConfig,
     document::{
         Attribute, Comment, Document, Element, ElementType, Node, NodeType, Selector, SelectorItem,
-        Text, TextLike, TextSlice,
+        Tag, Text, TextLike, TextSlice,
     },
     error::InternalResult,
     utils::default,
@@ -18,8 +18,8 @@ mod attr {
     pub const XMLNS: &str = "xmlns:mty";
     pub const START: &str = "mty:start";
     pub const END: &str = "mty:end";
-    pub const CONTENT_START: &str = "mty:ct-start";
-    pub const CONTENT_END: &str = "mty:ct-end";
+    pub const CONTENT_START: &str = "mty:content-start";
+    pub const CONTENT_END: &str = "mty:content-end";
     pub const VERBATIM: &str = "mty:verbatim";
     pub const RAW: &str = "mty:raw";
     pub const MULTILINE: &str = "mty:multiline";
@@ -27,7 +27,7 @@ mod attr {
 mod tag {
     pub const COMMENT: &str = "mty:comment";
     pub const TEXT: &str = "mty:text";
-    pub const ELEMENT: &str = "mty::element";
+    pub const ELEMENT: &str = "mty:element";
 }
 mod literal {
     pub const TRUE: &str = "true";
@@ -88,7 +88,7 @@ impl<'cfg> AttributeFactory<'cfg> {
         value: impl Into<Option<LocationRange>>,
     ) -> InternalResult<&mut Self> {
         match value.into() {
-            Some(value) if value != LocationRange::INVALID => self
+            Some(value) if value.start <= value.end => self
                 .add_location(start_name, value.start)?
                 .add_location(end_name, value.end),
             _ => Ok(self),
@@ -114,34 +114,25 @@ impl<'cfg> AttributeFactory<'cfg> {
         }))
     }
 
-    fn finish(self, target: &mut Element<'cfg>) -> InternalResult {
-        let location = self.location;
-        let Some(item) = self.build_selector_item()? else {
-            return Ok(());
-        };
-
-        match target.selectors.first_mut() {
-            Some(first) => {
-                first.items.push(item);
-            }
-            None => {
-                target.selectors.push(Selector {
-                    items: vec![item],
-                    ..Selector::empty(location).with_tag(tag::ELEMENT)
-                });
-            }
-        }
-
+    fn finish(self, target: &mut Selector<'cfg>) -> InternalResult {
+        target.items.extend(self.build_selector_item()?);
         Ok(())
     }
 }
 
-#[derive(Default)]
 struct TransformContext<'cx, 'cfg> {
-    _lt: PhantomData<(&'cx (), &'cfg ())>,
+    options: &'cx MetadataConfig,
+    _lt: PhantomData<(&'cfg ())>,
 }
 
 impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
+    fn new(options: &'cx MetadataConfig) -> Self {
+        Self {
+            options,
+            _lt: PhantomData,
+        }
+    }
+
     fn attrs(&self, location: Location) -> AttributeFactory<'cfg> {
         AttributeFactory {
             out: default(),
@@ -151,22 +142,69 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
 
     fn handle_element(
         &mut self,
-        range: LocationRange,
+        outer_range: LocationRange,
         element: &mut Element<'cfg>,
         root: bool,
     ) -> InternalResult {
-        let mut attrs = self.attrs(range.start);
-        if root {
-            attrs.add(attr::XMLNS.into(), XMLNS_URI)?;
+        if !element.selectors.iter().any(|s| !s.uninferred()) {
+            if !self.options.elements {
+                return Ok(());
+            }
+
+            if element.selectors.is_empty() {
+                element.selectors.push(Selector::empty(outer_range.start));
+            }
         }
 
-        attrs.add_range(attr::START, attr::END, range)?.add_range(
-            attr::CONTENT_START,
-            attr::CONTENT_END,
-            element.content.range,
-        )?;
+        // Index of the outermost selector
+        let outer_selector_index = if self.options.elements {
+            0
+        } else {
+            element
+                .selectors
+                .iter()
+                .position(|s| !s.uninferred())
+                .unwrap_or(0)
+        };
 
-        attrs.finish(element)?;
+        let mut range;
+        let mut content_range = element.content.range;
+
+        for (i, selector) in element.selectors.iter_mut().enumerate().rev() {
+            if selector.uninferred() {
+                if !self.options.elements {
+                    continue;
+                }
+                selector.tag = Tag::Explicit {
+                    value: tag::ELEMENT.into(),
+                };
+            }
+
+            let mut attrs = self.attrs(selector.range.end);
+
+            if i == outer_selector_index {
+                if root {
+                    attrs.add(attr::XMLNS.into(), XMLNS_URI)?;
+                }
+                range = outer_range;
+            } else {
+                range = content_range.combine(selector.range);
+                range = range.combine(LocationRange {
+                    start: selector.range.start,
+                    end: outer_range.end,
+                });
+            }
+
+            attrs.add_range(attr::START, attr::END, range)?.add_range(
+                attr::CONTENT_START,
+                attr::CONTENT_END,
+                element.content.range,
+            )?;
+
+            attrs.finish(selector)?;
+            content_range = content_range.combine(range);
+        }
+
         Ok(())
     }
     fn process_node(
@@ -178,9 +216,7 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
         let range = node.range;
         match node.node_type {
             NodeType::Element { ref mut element } => {
-                if !element.selectors.is_empty() {
-                    self.handle_element(range, element, root)?;
-                }
+                self.handle_element(range, element, root)?;
                 element.content.nodes = mem::take(&mut element.content.nodes)
                     .into_iter()
                     .map(|n| self.process_node(n, options, false))
@@ -189,7 +225,6 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
             NodeType::TextLike {
                 text_like: TextLike::Text { ref text },
             } if options.elements && !text.raw => {
-                let mut element = Element::new(range, ElementType::Unknown {}).with_tag(tag::TEXT);
                 let mut attrs = self.attrs(range.start);
 
                 attrs
@@ -197,8 +232,15 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                     .add_bool(attr::RAW, !text.escape_out)?
                     .add_bool(attr::MULTILINE, text.multiline.then_some(text.multiline))?;
 
-                attrs.finish(&mut element)?;
+                let mut selector = Selector::empty(range.start).with_tag(tag::TEXT);
+                attrs.finish(&mut selector)?;
+
+                let mut element = Element::new(range, ElementType::Unknown {});
+                element.format_inline = true;
+                element.content.range = LocationRange::INVALID;
                 element.content.nodes.push(node);
+                element.selectors = vec![selector];
+
                 self.handle_element(range, &mut element, root)?;
                 node = element.into();
             }
@@ -209,7 +251,8 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                 let mut element =
                     Element::new(range, ElementType::Unknown {}).with_tag(tag::COMMENT);
 
-                element.content.nodes.push(Node {
+                element.format_inline = true;
+                element.content.nodes = vec![Node {
                     range,
                     node_type: NodeType::TextLike {
                         text_like: TextLike::Text {
@@ -220,7 +263,7 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                             },
                         },
                     },
-                });
+                }];
                 self.handle_element(range, &mut element, root)?;
                 node = element.into();
             }
@@ -236,7 +279,7 @@ pub fn add_metadata<'cfg>(
     mut target: Document<'cfg>,
     options: &MetadataConfig,
 ) -> InternalResult<Document<'cfg>> {
-    let mut cx = TransformContext { _lt: PhantomData };
+    let mut cx = TransformContext::new(options);
 
     target.content.nodes = target
         .content

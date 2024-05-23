@@ -59,7 +59,8 @@ pub fn complete_page<'cfg>(mut doc: Document<'cfg>, src: &str) -> InternalResult
         return Ok(doc);
     }
 
-    let mut root = Element::new(doc.content.range, ElementType::Unknown {}).with_tag("html");
+    let mut root = Element::new(LocationRange::INVALID, ElementType::Unknown {}).with_tag("html");
+    root.content.range = doc.content.range;
 
     if doc
         .content
@@ -70,8 +71,10 @@ pub fn complete_page<'cfg>(mut doc: Document<'cfg>, src: &str) -> InternalResult
         // There's already a body tag so just wrap it all in <html> and call it good.
         root.content.nodes = doc.content.nodes
     } else {
-        let mut head = Element::new(doc.range, ElementType::Unknown {}).with_tag("head");
-        let mut body = Element::new(doc.range, ElementType::Unknown {}).with_tag("body");
+        let mut head =
+            Element::new(LocationRange::INVALID, ElementType::Unknown {}).with_tag("head");
+        let mut body =
+            Element::new(LocationRange::INVALID, ElementType::Unknown {}).with_tag("body");
 
         body.content.nodes = doc
             .content

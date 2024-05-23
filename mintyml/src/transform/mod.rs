@@ -13,9 +13,6 @@ mod apply_special_tags;
 mod complete_page;
 mod metadata;
 
-struct TransformError;
-type TransformResult<T = ()> = Result<T, TransformError>;
-
 /// If `lang` contains a value, assign it to the `lang` attribute of each top-level element.
 fn apply_lang<'src>(document: &mut Document<'src>, lang: &Option<Cow<'src, str>>) {
     if let Some(ref lang) = lang {

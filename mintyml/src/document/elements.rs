@@ -62,7 +62,7 @@ pub struct Element<'cfg> {
     pub selectors: Vec<Selector<'cfg>>,
     pub content: Content<'cfg>,
     pub element_type: ElementType,
-    pub(super) format_inline: bool,
+    pub(crate) format_inline: bool,
     pub(super) is_raw: bool,
 }
 
