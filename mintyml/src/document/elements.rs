@@ -63,7 +63,7 @@ pub struct Element<'cfg> {
     pub content: Content<'cfg>,
     pub element_type: ElementType,
     pub(crate) format_inline: bool,
-    pub(super) is_raw: bool,
+    pub(crate) is_raw: bool,
 }
 
 impl<'cfg> Element<'cfg> {

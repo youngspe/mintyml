@@ -58,11 +58,13 @@ impl<'cfg> AttributeFactory<'cfg> {
         name: &'cfg str,
         value: Option<impl Into<TextSlice<'cfg>>>,
     ) -> InternalResult<&mut Self> {
-        self.out.push(Attribute {
-            range: self.range(),
-            name: name.into(),
-            value: value.map(Into::into),
-        });
+        if let Some(value) = value {
+            self.out.push(Attribute {
+                range: self.range(),
+                name: name.into(),
+                value: Some(value.into()),
+            });
+        }
         Ok(self)
     }
     fn add(
@@ -101,6 +103,15 @@ impl<'cfg> AttributeFactory<'cfg> {
         value: impl Into<Option<bool>>,
     ) -> InternalResult<&mut Self> {
         self.add_some(name, value.into().map(bool_string))
+    }
+
+    fn add_bool_except(
+        &mut self,
+        name: &'cfg str,
+        value: bool,
+        default: bool,
+    ) -> InternalResult<&mut Self> {
+        self.add_bool(name, (value != default).then_some(value))
     }
 
     fn build_selector_item(self) -> InternalResult<Option<SelectorItem<'cfg>>> {
@@ -187,6 +198,7 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                     attrs.add(attr::XMLNS.into(), XMLNS_URI)?;
                 }
                 range = outer_range;
+                attrs.add_bool_except(attr::RAW, element.is_raw, false)?;
             } else {
                 range = content_range.combine(LocationRange {
                     start: selector.range.start,
@@ -227,14 +239,14 @@ impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {
                 let mut attrs = self.attrs(range.start);
 
                 attrs
-                    .add_bool(attr::VERBATIM, !text.unescape_in)?
-                    .add_bool(attr::RAW, !text.escape_out)?
-                    .add_bool(attr::MULTILINE, text.multiline.then_some(text.multiline))?;
+                    .add_bool_except(attr::VERBATIM, !text.unescape_in, false)?
+                    .add_bool_except(attr::MULTILINE, text.multiline, false)?;
 
                 let mut selector = Selector::empty(range.start).with_tag(tag::TEXT);
                 attrs.finish(&mut selector)?;
 
                 let mut element = Element::new(range, ElementType::Unknown {});
+                element.is_raw = text.escape_out;
                 element.format_inline = true;
                 element.content.range = LocationRange::INVALID;
                 element.content.nodes.push(node);

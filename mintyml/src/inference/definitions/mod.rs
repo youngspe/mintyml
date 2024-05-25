@@ -55,6 +55,7 @@ fn common_methods<'cfg>() -> impl MethodDefinition<'cfg> {
         .when(tag("label"), &specialty::LabelInfer {})
         .when(tag("fieldset"), &specialty::FieldSetInfer {})
         .when(tag("picture"), &specialty::PictureInfer {})
+        .when(tag_in(["style", "script"]), &RawInfer {})
 }
 
 #[non_exhaustive]
@@ -92,5 +93,18 @@ impl<'cfg> Infer<'cfg> for PhrasingInfer {
             )
             .when(block(), &StandardInfer {})
             .default(&PhrasingInfer {})
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct RawInfer {}
+
+impl<'cfg> Infer<'cfg> for RawInfer {
+    fn define_tags(&self) -> impl TagDefinition<'cfg> {
+        StandardInfer {}.define_tags()
+    }
+    fn root_is_raw(&self) -> bool {
+        true
     }
 }
