@@ -85,38 +85,37 @@ impl<'cfg> Element<'cfg> {
         self.is_raw
     }
 
-    /// If `selectors` contains an uninferred tag at index >= 1, split the element
-    /// into two nested elements so that the uninferred tag is at index 0 of the child element.
-    pub fn split_uninferred(&mut self) {
-        if let Some(uninferred_selector_index) = self
-            .selectors
-            .iter()
-            .skip(1)
-            .position(|s| s.uninferred())
-            .map(|i| i + 1)
-        {
-            let new_selectors = self.selectors.split_off(uninferred_selector_index);
-            let selector_start = new_selectors[0].range.start;
+    fn split_at(&mut self, selector_index: usize) {
+        let new_selectors = self.selectors.split_off(selector_index);
+        let selector_start = new_selectors[0].range.start;
 
-            let new_range = self.content.range.combine(LocationRange {
-                start: selector_start,
-                end: self.range.end,
-            });
+        let new_range = self.content.range.combine(LocationRange {
+            start: selector_start,
+            end: self.range.end,
+        });
 
-            let new_element = Element {
-                range: new_range,
-                selectors: new_selectors,
-                content: Content {
-                    range: self.content.range,
-                    nodes: mem::take(&mut self.content.nodes),
-                },
-                element_type: self.element_type.clone(),
-                format_inline: self.format_inline,
-                is_raw: self.is_raw,
-            };
-            self.content.range = self.content.range.combine(new_range);
-            self.content.nodes = vec![new_element.into()];
-            self.format_inline = true;
+        let new_element = Element {
+            range: new_range,
+            selectors: new_selectors,
+            content: Content {
+                range: self.content.range,
+                nodes: mem::take(&mut self.content.nodes),
+            },
+            element_type: self.element_type.clone(),
+            format_inline: self.format_inline,
+            is_raw: self.is_raw,
+        };
+        self.content.range = self.content.range.combine(new_range);
+        self.content.nodes = vec![new_element.into()];
+        self.format_inline = true;
+    }
+
+    pub fn split_first(&mut self) -> bool {
+        if self.selectors.len() > 1 {
+            self.split_at(1);
+            true
+        } else {
+            false
         }
     }
 

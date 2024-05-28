@@ -502,23 +502,17 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
             let Some(element) = self.nodes[index].as_element_mut() else {
                 return;
             };
-            element.split_uninferred();
+            element.split_first();
             mem::take(&mut element.content.nodes)
         };
+
+        let predicate_context =
+            Self::get_predicate_context(self.src, &self.nodes, &self.parent_context, index);
 
         let method = {
             let mut index = 0;
             loop {
-                match define_methods.test(
-                    &Self::get_predicate_context(
-                        self.src,
-                        &self.nodes,
-                        &self.parent_context,
-                        index,
-                    ),
-                    0,
-                    index,
-                ) {
+                match define_methods.test(&predicate_context, 0, index) {
                     Ok(method) => break method,
                     Err(i) => {
                         index = i + 1;
@@ -529,26 +523,13 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
         .map(|m| &*m)
         .unwrap_or_default();
 
-        {
-            let Some(element) = self.nodes[index].as_element_mut() else {
-                return;
-            };
-
-            if method.get_inner().root_is_raw() {
-                element.is_raw = true;
-            }
-        }
+        let set_raw = method.get_inner().root_is_raw();
 
         {
             method.get_inner().infer(&mut Inferrer {
                 src: self.src,
                 nodes: &mut nodes,
-                parent_context: Some(&Self::get_predicate_context(
-                    self.src,
-                    &self.nodes,
-                    &self.parent_context,
-                    index,
-                )),
+                parent_context: Some(&predicate_context),
                 states: self.states,
             });
         }
@@ -558,6 +539,7 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
                 return;
             };
             element.content.nodes = nodes;
+            element.is_raw |= set_raw;
         }
     }
 }

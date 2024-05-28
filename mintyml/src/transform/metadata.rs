@@ -133,7 +133,7 @@ impl<'cfg> AttributeFactory<'cfg> {
 
 struct TransformContext<'cx, 'cfg> {
     options: &'cx MetadataConfig,
-    _lt: PhantomData<(&'cfg ())>,
+    _lt: PhantomData<&'cfg ()>,
 }
 
 impl<'cx, 'cfg> TransformContext<'cx, 'cfg> {

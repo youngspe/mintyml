@@ -413,3 +413,36 @@ fn multiline_code_after_text() {
         )
     )
 }
+
+#[test]
+fn small_document_with_list() {
+    let src = r#"
+    style> foo
+    article {
+        h1> Title
+
+        paragraph
+
+        ol {
+            a
+
+            b
+        }
+    }
+    "#;
+
+    let out = convert_unwrap(src, OutputConfig::new().complete_page(true));
+
+    assert_eq!(
+        out,
+        concat!(
+            "<!DOCTYPE html>\n",
+            r#"<html><head><style>foo</style></head> <body><article>"#,
+            r#"<h1>Title</h1> "#,
+            r#"<p>paragraph</p> "#,
+            r#"<ol>"#,
+            r#"<li>a</li> <li>b</li>"#,
+            r#"</ol></article></body></html>"#,
+        )
+    )
+}
