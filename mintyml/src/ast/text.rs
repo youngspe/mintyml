@@ -77,7 +77,7 @@ gramma::define_token!(
         )
     })]
     pub struct MultilineUnescapedBody;
-    #[pattern(matcher = exactly("'''") + !char('\''))]
+    #[pattern(matcher = exactly("'''") + !precedes(char('\'')))]
     pub struct MultilineUnescapedClose;
 
     #[pattern(matcher = {
@@ -92,7 +92,7 @@ gramma::define_token!(
         )
     })]
     pub struct MultilineEscapedBody;
-    #[pattern(matcher = exactly("\"\"\"") + !char('"'))]
+    #[pattern(matcher = exactly("\"\"\"") + !precedes(char('"')))]
     pub struct MultilineEscapedClose;
 
     #[pattern(matcher = {
@@ -107,7 +107,7 @@ gramma::define_token!(
         )
     })]
     pub struct MultilineCodeBody;
-    #[pattern(matcher = exactly("```") + !char('`'))]
+    #[pattern(matcher = exactly("```") + !precedes(char('`')))]
     pub struct MultilineCodeClose;
 
     #[pattern(matcher = interpolation())]

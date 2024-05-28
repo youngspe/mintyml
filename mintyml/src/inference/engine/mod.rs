@@ -210,15 +210,23 @@ pub trait Infer<'cfg, _Bound = &'cfg Self>: 'cfg + fmt::Debug {
     fn define_methods(&self) -> impl MethodDefinition<'cfg> {
         StandardInfer {}.define_methods()
     }
+    // TODO: generalize this e.g. to provide some number of "PropertyDefinition"s:
+    fn root_is_raw(&self) -> bool {
+        false
+    }
 }
 
 trait DynInfer<'cfg>: fmt::Debug {
     fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>);
+    fn root_is_raw(&self) -> bool;
 }
 
 impl<'cfg, I: Infer<'cfg>> DynInfer<'cfg> for I {
     fn infer(&self, inferrer: &mut Inferrer<'cfg, '_>) {
         inferrer.use_method(self.define_tags(), self.define_methods());
+    }
+    fn root_is_raw(&self) -> bool {
+        Infer::root_is_raw(self)
     }
 }
 
@@ -475,21 +483,32 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
         }
     }
 
+    fn get_predicate_context<'lt>(
+        src: &'cfg str,
+        nodes: &'lt &mut [Node<'cfg>],
+        &parent: &'lt Option<&InferencePredicateContext<'cfg, 'lt>>,
+        index: usize,
+    ) -> InferencePredicateContext<'cfg, 'lt> {
+        InferencePredicateContext {
+            src,
+            nodes,
+            parent,
+            index,
+        }
+    }
+
     fn inference_level(&mut self, define_methods: &mut impl MethodDefinition<'cfg>, index: usize) {
         let mut nodes = {
             let Some(element) = self.nodes[index].as_element_mut() else {
                 return;
             };
-            element.split_uninferred();
+            element.split_first();
             mem::take(&mut element.content.nodes)
         };
 
-        let predicate_context = InferencePredicateContext {
-            src: self.src,
-            nodes: &*self.nodes,
-            parent: self.parent_context,
-            index,
-        };
+        let predicate_context =
+            Self::get_predicate_context(self.src, &self.nodes, &self.parent_context, index);
+
         let method = {
             let mut index = 0;
             loop {
@@ -503,6 +522,8 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
         }
         .map(|m| &*m)
         .unwrap_or_default();
+
+        let set_raw = method.get_inner().root_is_raw();
 
         {
             method.get_inner().infer(&mut Inferrer {
@@ -518,6 +539,7 @@ impl<'cfg, 'infer> Inferrer<'cfg, 'infer> {
                 return;
             };
             element.content.nodes = nodes;
+            element.is_raw |= set_raw;
         }
     }
 }

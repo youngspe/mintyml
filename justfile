@@ -56,18 +56,39 @@ publish-packages:
     Publish-Packages -Publish; \
     '
 
-publish-release:
+start-release-workflow:
     pwsh -c ' \
     $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
-    Publish-Release -Publish; \
+    Start-ReleaseWorkflow -Publish; \
     '
 
-build-release:
+new-release TAG:
     pwsh -c ' \
     $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
-    Build-Release; \
+    New-Release -Tag "{{TAG}}"; \
+    '
+
+update-release TAG TARGET_FILE:
+    pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
+    Import-Module ./build-utils.psm1; \
+    Update-Release -Publish -Tag "{{TAG}}" -TargetFile "{{TARGET_FILE}}"; \
+    '
+
+publish-release TAG:
+    pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
+    Import-Module ./build-utils.psm1; \
+    Publish-Release -Tag "{{TAG}}"; \
+    '
+
+build-release TARGET_FILE:
+    pwsh -c ' \
+    $ErrorActionPreference = "Stop"; \
+    Import-Module ./build-utils.psm1; \
+    Build-Release -TargetFile "{{TARGET_FILE}}"; \
     '
 
 update-readme:

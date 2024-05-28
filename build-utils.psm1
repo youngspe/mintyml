@@ -1,29 +1,8 @@
 using namespace System
 using namespace System.Collections.Generic
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
 $WSRoot = $PSScriptRoot
-
-function Test-ExitCode {
-    $command = $args[0]
-    $argList = $args[1..$args.Length]
-    if ($command) {
-        $global:LASTEXITCODE = 0
-        try {
-            & $command @argList
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "$command failed with exit code $LASTEXITCODE"
-            }
-        }
-        catch {
-            Write-Error $_
-        }
-    }
-    else {
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "command failed with exit code $LASTEXITCODE"
-        }
-    }
-}
 
 function Use-Location(
     [string] $Path = $null,
@@ -42,6 +21,10 @@ function Get-Version {
     Get-Content "$WSRoot/Cargo.toml" -Raw `
     | Select-String '(?m)^\s*version\s*=\s*"(?<version>.*?)"\s*$' `
     | ForEach-Object { $_.Matches[0].Groups['version'].Value }
+}
+
+function Get-Tag([string] $Version = (Get-Version)) {
+    "v$Version"
 }
 
 function Get-VersionIncrement(
@@ -130,7 +113,8 @@ function Update-Version([WSState] $State) {
     if ($State.OldTag) {
         Write-Host "Updating version in manifest..."
         Set-Version $version
-    } else {
+    }
+    else {
         Write-Host "Manifest remains unchanged"
     }
 
@@ -154,7 +138,7 @@ function Publish-Packages([switch] $Publish) {
     if ("mintyml" -in $State.Packages) {
         Write-Host "Publishing mintyml..."
         try {
-            Test-ExitCode cargo publish -q -p mintyml @dryRun --allow-dirty
+            cargo publish -q -p mintyml @dryRun --allow-dirty
             $successCount += 1
         }
         catch {
@@ -168,7 +152,7 @@ function Publish-Packages([switch] $Publish) {
     if ("minty-cli" -in $State.Packages) {
         Write-Host "Publishing minty-cli..."
         try {
-            Test-ExitCode cargo publish -q -p mintyml-cli @dryRun --allow-dirty
+            cargo publish -q -p mintyml-cli @dryRun --allow-dirty
             $successCount += 1
         }
         catch {
@@ -185,7 +169,7 @@ function Publish-Packages([switch] $Publish) {
         Push-Location "$WSRoot/minty-wasm"
         try {
             Build-NodeManifest $State
-            Test-ExitCode npm publish @dryRun
+            npm publish @dryRun
             $successCount += 1
         }
         catch {
@@ -211,49 +195,53 @@ function Sync-Changes([string] $TagName, [bool] $Bump, [switch] $Publish) {
 
     if ($Bump) {
         Write-Host "Committing version bump..."
-        Test-ExitCode git add .
-        Test-ExitCode git commit -m "Increment to $TagName"
-        Test-ExitCode git pull --rebase --strategy-option=theirs
+        git add .
+        git commit -m "Increment to $TagName"
+        git pull --rebase --strategy-option=theirs
         Write-Host "Pushing version bump...."
-        Test-ExitCode git push @dryRun
+        git push @dryRun
     }
     Write-Host "Making tag..."
-    Test-ExitCode git tag --force $TagName -m ""
+    git tag --force $TagName -m ""
     Write-Host "Pushing tag..."
-    Test-ExitCode git push @dryRun origin "refs/tags/$TagName"
+    git push @dryRun origin "refs/tags/$TagName"
+}
+
+function Get-Targets([string] $File) {
+    Get-Content $File
+    | ForEach-Object Trim `
+    | Where-Object { $_ -and $_ -notlike '#*' }
 }
 
 function Build-Release {
     [CmdletBinding()]
-    param ($Version = $null)
-    $Version ??= Get-Version
-
-    $targets = Get-Content "$WSRoot/release-targets.txt" `
-    | ForEach-Object Trim `
-    | Where-Object { $_ -and $_ -notlike '#*' }
+    param (
+        [string] $Tag = (Get-Tag),
+        [string] $TargetFile,
+        [List[string]] $Targets = (Get-Targets $TargetFile)
+    )
 
     [List[Exception]] $Errors = @()
 
     $outDir = "$WSRoot/target-release"
 
-    $targets | ForEach-Object {
+    $Targets | ForEach-Object {
         $target = $_
         try {
             Write-Host "Building $target ..."
-            Test-ExitCode rustup target add $target
-            Test-ExitCode cross build -q --release -p mintyml-cli --target $target
+            rustup target add $target
+            cross build -q --release -p mintyml-cli --target $target
 
             $file = Get-ChildItem `
                 "$WSRoot/target/$target/release/mintyml-cli*" `
                 -File -Include 'mintyml-cli', 'mintyml-cli.exe'
 
-            $outName = "mintyml-cli-$target-v$Version"
+            $outName = "mintyml-cli-$target-$Tag"
 
             New-Item -ItemType Directory -Force "$outDir/$outName" > $null
             Copy-Item -Path $file -Destination "$outDir/$outName/"
 
-            Test-ExitCode tar -czf "$outDir/$outName.tgz" `
-                -C $outDir $outName
+            tar -czf "$outDir/$outName.tgz" -C $outDir $outName
         }
         catch {
             Write-Host "::error::Target '$target' Failed: $_"
@@ -266,27 +254,56 @@ function Build-Release {
     }
 }
 
-function Publish-Release {
+function New-Release {
     [CmdletBinding()]
-    param($Version = $null, [switch] $Publish)
-    if (-not $Version) {
-        $Version = Get-Version
-    }
-    $tagName = "v$Version"
-    gh release view $tagName *> $null
-    if ($?) {
-        Write-Host "::notice title=Skipping release::Release $tagName already exists"
-        return
-    }
+    param(
+        [string] $Tag = (Get-Tag)
+    )
 
-    Build-Release $Version
+    Write-Host "Creating release..."
+    gh release create $Tag --draft=true --generate-notes
+}
+
+function Update-Release {
+    [CmdletBinding()]
+    param(
+        [string] $Tag = (Get-Tag),
+        [string] $TargetFile,
+        [List[string]] $Targets = (Get-Targets $TargetFile),
+        [switch] $Publish
+    )
+
+    $existingAssets = gh release view $Tag --json 'assets' --jq '[.assets[].name]'
+    $Targets = $Targets | Where-Object { -not $existingAssets.Contains($_) }
+
+    Build-Release -Tag $Tag -Targets $Targets
 
     if ($Publish) {
         $assets = Get-ChildItem "$WSRoot/target-release/*.tgz" | ForEach-Object FullName
-        Write-Host "Creating release..."
-        Test-ExitCode gh release create --latest $tagName @assets
+        Write-Host "Uploading assets..."
+        gh release upload $Tag @assets
     }
 }
 
-Export-ModuleMember Publish-Packages, Build-NodeManifest, Build-Release, Publish-Release, Sync-Changes
+function Publish-Release {
+    [CmdletBinding()]
+    param(
+        [string] $Tag = (Get-Tag)
+    )
+
+    Write-Host "Publishing release..."
+    gh release edit $Tag --draft=false --latest
+}
+
+
+function Start-ReleaseWorkflow {
+    [CmdletBinding()] param()
+
+    Write-Host "Scheduling release..."
+    gh workflow run release-cli.yml -f "tag=$(Get-Tag)"
+}
+
+Export-ModuleMember `
+    Publish-Packages, Build-NodeManifest, Sync-Changes, Start-ReleaseWorkflow, `
+    Build-Release, New-Release, Update-Release, Publish-Release
 

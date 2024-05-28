@@ -28,17 +28,17 @@ jobs:
       dirs: ${{ github.event_name != 'workflow_dispatch' && steps.changed_files.outputs.all_changed_files || inputs.changed_dirs || '[".github","mintyml","minty-cli","minty-wasm","web-demo"]' }}
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Get changed files
-        if: github.event_name != 'workflow_dispatch'
-        id: changed_files
-        uses: tj-actions/changed-files@v44
-        with:
-          dir_names: true
-          dir_names_exclude_current_dir: true
-          dir_names_max_depth: 1
-          json: true
-          escape_json: false
+    - uses: actions/checkout@v4
+    - name: Get changed files
+      if: github.event_name != 'workflow_dispatch'
+      id: changed_files
+      uses: tj-actions/changed-files@v44
+      with:
+        dir_names: true
+        dir_names_exclude_current_dir: true
+        dir_names_max_depth: 1
+        json: true
+        escape_json: false
 
   on-push:
     runs-on: ubuntu-latest
@@ -92,11 +92,8 @@ jobs:
       run: |
         npm config -g set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
         just publish-packages
-
-    - uses: taiki-e/install-action@cross
-
-    - name: Publish Release
+    - name: schedule release workflow
       env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        just publish-release
+        just start-release-workflow

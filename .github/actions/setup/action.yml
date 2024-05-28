@@ -1,13 +1,25 @@
 name: "setup"
 description: shared setup steps
+inputs:
+  rust:
+    description: "Set to any truthy value to run Rust-related steps"
+    required: false
+    default: "true"
+  node:
+    description: "Set to any truthy value to run Node-related steps"
+    required: false
+    default: "true"
+
 runs:
   using: composite
   steps:
-  - uses: actions/setup-node@v4
+  - if: ${{ fromJson(inputs.node) }}
+    uses: actions/setup-node@v4
     with:
       node-version: "20"
 
-  - name: Rust cache
+  - if: ${{ fromJson(inputs.rust) }}
+    name: Rust cache
     uses: actions/cache@v3
     with:
       path: |
@@ -20,12 +32,14 @@ runs:
       restore-keys: |
         ${{ runner.os }}-cargo-
 
-  - name: Get npm cache directory
+  - if: ${{ fromJson(inputs.node) }}
+    name: Get npm cache directory
     id: npm-cache-dir
     shell: sh
     run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
 
-  - uses: actions/cache@v3
+  - if: ${{ fromJson(inputs.node) }}
+    uses: actions/cache@v3
     with:
       path: ${{ steps.npm-cache-dir.outputs.dir }}
       key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -34,5 +48,6 @@ runs:
 
   - uses: taiki-e/install-action@just
 
-  - name: Setup wasm-pack
+  - if: ${{ fromJson(inputs.rust) && fromJson(inputs.node) }}
+    name: Setup wasm-pack
     uses: jetli/wasm-pack-action@v0.4.0

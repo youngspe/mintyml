@@ -40,6 +40,7 @@ struct OutputContext<'cx, 'cfg, Out> {
     indent_level: u32,
     element: Option<&'cx Element<'cfg>>,
     follows_space: bool,
+    is_raw: bool,
 }
 
 trait Escape {
@@ -168,7 +169,7 @@ where
     }
 
     fn is_raw(&self) -> bool {
-        self.element.map(|e| e.is_raw()).unwrap_or(false)
+        self.is_raw
     }
 
     fn slice<'s>(&self, s: &'s TextSlice<'cfg>) -> &'s str {
@@ -318,9 +319,12 @@ where
         element: &'cx Element<'cfg>,
         f: impl FnOnce(&mut Self) -> OutputResult<T>,
     ) -> OutputResult<T> {
+        let mut is_raw = self.is_raw || element.is_raw();
         let mut element = Some(element);
         mem::swap(&mut element, &mut self.element);
+        mem::swap(&mut self.is_raw, &mut is_raw);
         let out = f(self);
+        self.is_raw = is_raw;
         self.element = element;
         out
     }
@@ -514,6 +518,7 @@ pub fn output_html_to<'cx, 'cfg>(
         indent_level: 0,
         element: None,
         follows_space: true,
+        is_raw: false,
     }) {
         mut cx => {
             if cx.config.complete_page.unwrap_or(false) {
