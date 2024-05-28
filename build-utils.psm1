@@ -299,8 +299,16 @@ function Publish-Release {
 function Start-ReleaseWorkflow {
     [CmdletBinding()] param()
 
-    Write-Host "Scheduling release..."
-    gh workflow run release-cli.yml -f "tag=$(Get-Tag)"
+    $tag = Get-Tag
+    $releaseExists = try { gh release view $tag *> $null ; $true } catch { $false }
+
+    if ($releaseExists) {
+        Write-Host "Release $tag already exists."
+    }
+    else {
+        Write-Host "Scheduling CLI release for $tag ..."
+        gh workflow run release-cli.yml -f "tag=$tag"
+    }
 }
 
 Export-ModuleMember `

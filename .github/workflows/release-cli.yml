@@ -1,4 +1,6 @@
 name: Release CLI
+permissions:
+  contents: write
 
 on:
   push:
