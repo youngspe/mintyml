@@ -25,7 +25,7 @@ jobs:
     - env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        gh release create --repo '${{ github.repository }}'' '${{ env.TAG }}' --draft=true --generate-notes
+        gh release create --repo '${{ github.repository }}' '${{ env.TAG }}' --draft=true --generate-notes
 
 
   build-assets:
