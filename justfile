@@ -60,7 +60,7 @@ start-release-workflow:
     pwsh -c ' \
     $ErrorActionPreference = "Stop"; \
     Import-Module ./build-utils.psm1; \
-    Start-ReleaseWorkflow -Publish; \
+    Start-ReleaseWorkflow; \
     '
 
 new-release TAG:

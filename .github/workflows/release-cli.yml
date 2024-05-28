@@ -1,4 +1,6 @@
 name: Release CLI
+permissions:
+  contents: write
 
 on:
   push:
@@ -17,13 +19,13 @@ concurrency:
 
 jobs:
   create-release:
-    name: Publish CLI Release
+    name: Create CLI Release
     runs-on: ubuntu-latest
     steps:
     - env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        just new-release '${{ env.TAG }}'
+        gh release create --repo '${{ github.repository }}' '${{ env.TAG }}' --draft=true --generate-notes
 
 
   build-assets:
@@ -62,4 +64,4 @@ jobs:
     - env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        just publish-release '${{ env.TAG }}'
+        gh release edit --repo '${{ github.repository }}' '${{ env.TAG }}' --draft=false --latest
