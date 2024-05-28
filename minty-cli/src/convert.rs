@@ -1,68 +1,29 @@
+use core::fmt;
 use std::{
-    fs::{self, read_dir},
-    io::Write,
-    iter, mem,
+    fmt::Write as _,
+    iter,
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, bail, Context, Result as AnyResult};
-use either::Either;
+use anyhow::{anyhow, Context};
 use mintyml::MetadataConfig;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     args::{self, FailFast},
     error_reporter::{ErrorCategory, OwnedStreamName},
-    utils::{default, UtilExt},
-    AppCx, CxType, IoHelper,
+    utils::{default, ArcPath, PathExt, UtilExt},
+    AppCx, CxType, IoHelper, Result,
 };
 
 struct ConvertCx<'cx, Cx: CxType> {
-    app_cx: &'cx AppCx<Cx>,
+    cx: &'cx AppCx<Cx>,
     args: super::args::Convert,
+    dot_path: ArcPath,
+    empty_path: ArcPath,
 }
 
 impl<'cx, Cx: CxType> ConvertCx<'cx, Cx> {
-    pub(crate) fn execute_stdin(mut self) -> AnyResult<bool> {
-        let dest_name = self.get_dest_name()?;
-        self.convert(
-            OwnedStreamName::Stdio,
-            Either::Left::<_, &mut dyn Write>(dest_name),
-            None,
-        )
-    }
-
-    fn get_dest_name(&mut self) -> AnyResult<OwnedStreamName> {
-        Ok(match self.args.dest {
-            args::ConvertDest { stdout: true, .. } => OwnedStreamName::Stdio,
-            args::ConvertDest {
-                out: Some(ref mut path),
-                ..
-            } => OwnedStreamName::File(mem::take(path).into()),
-            args::ConvertDest {
-                out: None,
-                stdout: false,
-            } => return Err(anyhow!("Output not specified.").context(ErrorCategory::Argument)),
-        })
-    }
-
-    pub(crate) fn execute_dir(self) -> AnyResult<bool> {
-        let recurse = self.get_recursion();
-        let dir = self.args.src.src_dir.as_deref().unwrap_or(Path::new(""));
-        let out = self.args.dest.out.as_deref().unwrap_or(dir);
-
-        if out.is_file() {
-            return Err(
-                anyhow!("<out> should be a directory when no source files are listed.")
-                    .context(ErrorCategory::Argument),
-            );
-        }
-
-        let paths = search_dir(&dir, recurse)?;
-
-        self.convert_relative_paths(&dir, &out, paths)
-    }
-
     pub(crate) fn get_recursion(&self) -> u32 {
         let recurse = match self.args.recurse {
             Some(Some(r)) => r,
@@ -72,93 +33,13 @@ impl<'cx, Cx: CxType> ConvertCx<'cx, Cx> {
         recurse
     }
 
-    pub(crate) fn execute_flatten(mut self) -> AnyResult<bool> {
-        let recurse = self.get_recursion();
-        let dest_name = self.get_dest_name()?;
-        let dir = self.args.src.src_dir.as_ref();
-
-        let paths = match (dir, self.args.src.src_files.take()) {
-            (Some(dir), Some(files)) => files
-                .into_iter()
-                .map(|f| if f.is_absolute() { f } else { dir.join(f) })
-                .collect(),
-            (Some(dir), None) => search_dir(&dir, recurse)?,
-            (None, Some(files)) => files,
-            (None, None) => bail!("No source files provided."),
-        };
-
-        let config = self.args.options.as_config();
-
-        let outputs: Vec<_> = paths
-            .into_par_iter()
-            .try_fold(
-                || (Vec::<u8>::new(), true),
-                |(mut buf, success), path| {
-                    self.convert(
-                        OwnedStreamName::File(path.into()),
-                        Either::Right(&mut buf),
-                        Some(&config),
-                    )
-                    .map(|success2| (buf, success & success2))
-                },
-            )
-            .collect::<Result<_, _>>()?;
-
-        let mut out = self.app_cx.io.open_write(&dest_name)?;
-
-        outputs
-            .into_iter()
-            .try_fold(true, |success1, (buf, success2)| {
-                out.write_all(&buf)?;
-                Ok(success1 & success2)
-            })
-    }
-
-    pub(crate) fn convert_relative_paths(
-        &self,
-        src: &Path,
-        dest: &Path,
-        paths: Vec<PathBuf>,
-    ) -> AnyResult<bool> {
-        fs::create_dir_all(&dest)?;
-
-        let mut last_dir: &Path = "".as_ref();
-        let mut new_dir_buf = default();
-
-        for path in paths.iter().filter_map(|p| p.parent()) {
-            if path != last_dir {
-                dest.clone_into(&mut new_dir_buf);
-                new_dir_buf.push(path);
-                fs::create_dir_all(path)?;
-                last_dir = path;
-            }
-        }
-        drop(new_dir_buf);
-
-        let config = self.args.options.as_config();
-
-        paths
-            .into_par_iter()
-            .map(|path| {
-                let src_file = src.join(&path);
-                let dest_file = output_name(&path, dest, &self.args.options)?;
-
-                self.convert(
-                    OwnedStreamName::File(src_file.into()),
-                    Either::Left::<_, &mut dyn Write>(OwnedStreamName::File(dest_file.into())),
-                    Some(&config),
-                )
-            })
-            .try_reduce(|| true, |lhs, rhs| Ok(lhs & rhs))
-    }
-
     pub(crate) fn convert(
         &self,
         source_name: OwnedStreamName,
-        dest_name: Either<OwnedStreamName, impl Write>,
+        dest_name: OwnedStreamName,
         config: Option<&mintyml::OutputConfig>,
-    ) -> AnyResult<bool> {
-        let src = try_with_context!(self.app_cx.io.read(&source_name), source_name);
+    ) -> Result<bool> {
+        let src = try_with_context!(self.cx.io.read(&source_name), source_name);
 
         let mut config_buf = None;
         let config = config.unwrap_or_else(|| config_buf.insert(self.args.options.as_config()));
@@ -178,17 +59,16 @@ impl<'cx, Cx: CxType> ConvertCx<'cx, Cx> {
         let success = error.is_none() && out.is_some();
 
         if let Some(error) = error {
-            self.app_cx
+            self.cx
                 .reporter
                 .conversion_error(source_name.clone(), error);
         }
 
         if let Some(out) = out {
-            match dest_name {
-                Either::Left(name) => self.app_cx.io.write(&name, out.as_str()),
-                Either::Right(mut dest) => dest.write_all(out.as_bytes()).err_into(),
-            }
-            .context(source_name)?;
+            self.cx
+                .io
+                .write(&dest_name, out.as_str())
+                .context(source_name)?;
         }
 
         match (success, self.args.options.fail_fast.unwrap_or_default()) {
@@ -197,39 +77,367 @@ impl<'cx, Cx: CxType> ConvertCx<'cx, Cx> {
         }
     }
 
-    fn execute(self) -> AnyResult<bool> {
-        if self.args.src.stdin {
-            return self.execute_stdin().context(OwnedStreamName::Stdio);
-        }
+    fn execute(mut self) -> Result<bool> {
+        let src = self.conversion_src_type()?;
+        let dest = self.conversion_dest_type()?;
 
-        if self.args.src.src_files.is_none() {
-            return self.execute_dir();
-        }
-
-        if self.args.dest.stdout {
-            return self.execute_flatten();
-        }
-
-        if self
-            .args
-            .src
-            .src_files
-            .as_ref()
-            .is_some_and(|s| s.len() == 1)
-        {
-            if self.args.dest.out.as_ref().is_some_and(|o| !o.is_dir()) {
-                return self.execute_flatten();
-            }
-
-            return self.execute_dir();
-        }
-
-        if self.args.dest.out.as_ref().is_some_and(|o| o.is_file()) {
-            return self.execute_flatten();
-        }
-
-        self.execute_dir()
+        self.convert_src_to_dest(src, dest)
     }
+
+    fn search_dir_inner(
+        &self,
+        base: &ArcPath,
+        exact: &mut PathBuf,
+        recurse: u32,
+        rel: &mut PathBuf,
+        out: &mut Vec<SourceFileLocation>,
+    ) -> Result {
+        let entries: Vec<_> = self.cx.io.read_dir(&exact)?.collect::<Result<_, _>>()?;
+
+        for (ref name, info) in entries {
+            if info.is_file() {
+                if has_minty_extension(name) {
+                    out.push(SourceFileLocation {
+                        base: base.clone(),
+                        relative: rel.join(name).into(),
+                    })
+                }
+            } else if recurse > 0 {
+                rel.push(name);
+                exact.push(name);
+                self.search_dir_inner(base, exact, recurse - 1, rel, out)?;
+                exact.pop();
+                rel.pop();
+            }
+        }
+        Ok(())
+    }
+    fn search_dir(
+        &self,
+        base: &ArcPath,
+        mut rel: PathBuf,
+        out: &mut Vec<SourceFileLocation>,
+    ) -> Result {
+        let mut exact = base.join(&rel);
+        self.search_dir_inner(base, &mut exact, self.get_recursion(), &mut rel, out)
+    }
+
+    fn conversion_src_type(&mut self) -> Result<SourceType> {
+        let mut out = default();
+
+        match (self.args.src.src_files.take(), self.args.src.src_dir.take()) {
+            _ if self.args.src.stdin => SourceType::Stdin,
+            (Some(mut src_files), dir) if src_files.len() == 1 => {
+                let single_argument = src_files.pop().unwrap_or_default();
+
+                let path_type = PathType::for_path(&self.cx, &single_argument)?;
+                let (base, relative) = self.get_search_parts(dir, Some(single_argument));
+
+                SourceType::File(SourceFileLocation { base, relative }, path_type)
+            }
+            (Some(src_files), dir) => {
+                for src_file in src_files {
+                    let path_info = self.cx.io.path_info(&src_file)?;
+                    let (base, relative) = self.get_search_parts(dir.as_ref(), Some(src_file));
+
+                    let Some(path_info) = path_info else {
+                        return Err(anyhow!(
+                            "'{}' does not exist",
+                            SourceFileLocation { base, relative }
+                        )
+                        .context(ErrorCategory::Argument));
+                    };
+
+                    if path_info.is_dir() {
+                        self.search_dir(&base, relative.into(), &mut out)?;
+                    } else {
+                        out.push(SourceFileLocation { base, relative });
+                    }
+                }
+
+                SourceType::Files(out)
+            }
+            (None, Some(dir)) => {
+                self.search_dir(&dir.into(), default(), &mut out)?;
+                SourceType::Dir(out)
+            }
+            (None, None) => {
+                self.search_dir(&self.dot_path, default(), &mut out)?;
+                SourceType::Implicit(out)
+            }
+        }
+        .wrap_ok()
+    }
+
+    fn conversion_dest_type(&mut self) -> Result<DestinationType> {
+        if self.args.dest.stdout {
+            DestinationType::Stdout
+        } else if let Some(out) = self.args.dest.out.take() {
+            let path_type = PathType::for_path(&self.cx, &out)?;
+            DestinationType::File(out.into(), path_type)
+        } else {
+            DestinationType::Implicit
+        }
+        .wrap_ok()
+    }
+
+    fn convert_multiple(
+        &mut self,
+        src: impl IntoParallelIterator<Item = SourceFileLocation>,
+        // if None, keep the original SourceFileLocation.base
+        dest: Option<ArcPath>,
+    ) -> Result<bool> {
+        let config = self.args.options.as_config();
+        src.into_par_iter()
+            .map(|src| {
+                let mut dest_buf;
+
+                if let Some(dest) = dest.as_ref() {
+                    dest_buf = dest.join(&src.relative);
+                } else {
+                    dest_buf = (*src.base).clone();
+                    dest_buf.push(&src.relative);
+                }
+
+                change_extension(&mut dest_buf, &self.args.options);
+                let dest_file: ArcPath = dest_buf.into();
+                let src_file = src.joined();
+
+                self.convert(
+                    OwnedStreamName::File(src_file),
+                    OwnedStreamName::File(dest_file),
+                    Some(&config),
+                )
+            })
+            .try_reduce(|| true, |lhs, rhs| Ok(lhs & rhs))
+    }
+
+    fn convert_src_to_dest(mut self, src: SourceType, dest: DestinationType) -> Result<bool> {
+        match (src, dest) {
+            (
+                SourceType::File(src, PathType::ProbablyDir | PathType::Dir { .. }),
+                DestinationType::File(_, PathType::File) | DestinationType::Stdout,
+            ) => return Err(anyhow!("'{src}' is not a file").context(ErrorCategory::Argument)),
+            (
+                SourceType::File(
+                    path,
+                    PathType::ProbablyFile | PathType::Unknown | PathType::ProbablyDir,
+                ),
+                _,
+            ) => return Err(anyhow!("'{path}' does not exist").context(ErrorCategory::Argument)),
+            (
+                SourceType::Dir(_) | SourceType::Implicit(_) | SourceType::Files(_),
+                DestinationType::File(out, PathType::File),
+            ) => {
+                return Err(anyhow!("'{}' is not a directory", out.display())
+                    .context(ErrorCategory::Argument))
+            }
+            (SourceType::File(src, PathType::File), DestinationType::Stdout) => self.convert(
+                OwnedStreamName::File(src.joined()),
+                OwnedStreamName::Stdio,
+                None,
+            ),
+            (
+                SourceType::Dir(_) | SourceType::Implicit(_) | SourceType::Files(_),
+                DestinationType::Stdout,
+            ) => {
+                return Err(anyhow!(
+                    "--stdout requires --stdin or exactly one source file"
+                ))
+            }
+            (SourceType::Stdin, DestinationType::Stdout) => {
+                self.convert(OwnedStreamName::Stdio, OwnedStreamName::Stdio, None)
+            }
+            (SourceType::Stdin, DestinationType::File(dest, dest_path_type))
+                if dest_path_type >= PathType::ProbablyDir =>
+            {
+                return Err(
+                    anyhow!("'{}' is not a file", dest.display()).context(ErrorCategory::Argument)
+                );
+            }
+            (SourceType::Stdin, DestinationType::File(dest, _)) => {
+                self.convert(OwnedStreamName::Stdio, OwnedStreamName::File(dest), None)
+            }
+            (SourceType::Stdin, DestinationType::Implicit) => {
+                return Err(
+                    anyhow!("--stdin requires --stdout or exactly one output file")
+                        .context(ErrorCategory::Argument),
+                )
+            }
+            (SourceType::File(src, PathType::File), DestinationType::Implicit) => {
+                self.convert_multiple([src], None)
+            }
+            (
+                SourceType::File(SourceFileLocation { base, relative }, PathType::Dir { .. }),
+                DestinationType::Implicit,
+            ) => {
+                let mut resolved = default();
+                self.search_dir(&base, relative.into_inner(), &mut resolved)?;
+                self.convert_multiple(resolved, None)
+            }
+            (
+                SourceType::Dir(resolved)
+                | SourceType::Files(resolved)
+                | SourceType::Implicit(resolved),
+                DestinationType::Implicit,
+            ) => self.convert_multiple(resolved, None),
+            (
+                SourceType::Dir(resolved)
+                | SourceType::Files(resolved)
+                | SourceType::Implicit(resolved),
+                DestinationType::File(dest, _),
+            ) => self.convert_multiple(resolved, Some(dest)),
+
+            (
+                SourceType::File(_, PathType::File),
+                DestinationType::File(
+                    dest,
+                    PathType::Dir {
+                        trailing_slash: false,
+                    },
+                ),
+            ) => {
+                return Err(
+                    anyhow!("'{}' is a directory", dest.display()).context(ErrorCategory::Argument)
+                )
+            }
+            (
+                SourceType::File(src, PathType::File),
+                DestinationType::File(dest, dest_path_type),
+            ) if dest_path_type >= PathType::ProbablyDir => {
+                self.convert_multiple([src], Some(dest))
+            }
+            (SourceType::File(src, PathType::File), DestinationType::File(dest, _)) => self
+                .convert(
+                    OwnedStreamName::File(src.joined()),
+                    OwnedStreamName::File(dest.into()),
+                    None,
+                ),
+
+            (
+                SourceType::File(
+                    SourceFileLocation { mut base, relative },
+                    PathType::Dir { trailing_slash },
+                ),
+                DestinationType::File(dest, _),
+            ) => {
+                let mut resolved = default();
+                let dir: PathBuf;
+
+                if !trailing_slash && dest.has_trailing_slash() && base.as_os_str().is_empty() {
+                    // copy the children of the source path rather than the path itself to the dest path
+                    base = dest
+                        .parent()
+                        .map(ArcPath::from)
+                        .unwrap_or(self.dot_path.clone());
+                    dir = relative.file_name().unwrap_or_default().into();
+                } else {
+                    base.push(relative);
+                    dir = default();
+                }
+
+                self.search_dir(&base, dir, &mut resolved)?;
+                self.convert_multiple(resolved, Some(dest))
+            }
+        }
+    }
+
+    fn get_search_parts(
+        &self,
+        dir: Option<impl PathExt>,
+        path: Option<impl PathExt>,
+    ) -> (ArcPath, ArcPath) {
+        if let Some(dir) = dir {
+            return (
+                dir.into_arc(),
+                path.map(PathExt::into_arc)
+                    .unwrap_or_else(|| self.empty_path.clone()),
+            );
+        }
+
+        let Some(path) = path else {
+            return (self.empty_path.clone(), self.empty_path.clone());
+        };
+
+        let file_name = path
+            .as_path()
+            .file_name()
+            .map(Into::into)
+            .unwrap_or_else(|| self.empty_path.clone());
+
+        let mut path = path.into_buf();
+        path.pop();
+
+        (path.into_arc(), file_name.into_arc())
+    }
+}
+
+struct SourceFileLocation {
+    base: ArcPath,
+    relative: ArcPath,
+}
+
+impl SourceFileLocation {
+    fn joined(mut self) -> ArcPath {
+        self.base.push(self.relative);
+        self.base
+    }
+}
+
+impl fmt::Display for SourceFileLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.base.display())?;
+        if !self.base.has_trailing_slash() {
+            f.write_char(std::path::MAIN_SEPARATOR)?;
+        }
+        write!(f, "{}", self.relative.display())?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum PathType {
+    File,
+    ProbablyFile,
+    Unknown,
+    ProbablyDir,
+    Dir { trailing_slash: bool },
+}
+
+impl PathType {
+    fn for_path(cx: &AppCx<impl CxType>, path: &Path) -> Result<Self> {
+        if let Some(info) = cx.io.path_info(path)? {
+            if info.is_dir() {
+                Self::Dir {
+                    trailing_slash: path.has_trailing_slash(),
+                }
+            } else {
+                // Here we'll assume if it's not a dir it's a file
+                Self::File
+            }
+        } else if path.has_trailing_slash() {
+            Self::ProbablyDir
+        } else if path.extension().is_some() {
+            Self::ProbablyFile
+        } else {
+            Self::Unknown
+        }
+        .wrap_ok()
+    }
+}
+
+enum SourceType {
+    Stdin,
+    Dir(Vec<SourceFileLocation>),
+    Implicit(Vec<SourceFileLocation>),
+    File(SourceFileLocation, PathType),
+    Files(Vec<SourceFileLocation>),
+}
+
+enum DestinationType {
+    Stdout,
+    Implicit,
+    File(ArcPath, PathType),
 }
 
 impl args::ConvertOptions {
@@ -271,7 +479,7 @@ impl args::ConvertOptions {
                     } => {
                         config.metadata = MetadataConfig::new()
                             .elements(self.metadata_elements.unwrap_or(false))
-                            .some();
+                            .wrap_some();
                     }
                     _ => {}
                 }
@@ -282,12 +490,14 @@ impl args::ConvertOptions {
 }
 
 impl super::args::Convert {
-    pub(crate) fn execute(self, cx: &AppCx<impl CxType>) -> AnyResult<bool> {
+    pub(crate) fn execute(self, cx: &AppCx<impl CxType>) -> Result<bool> {
         cx.reporter.set_mode(self.error_mode);
 
         ConvertCx {
-            app_cx: cx,
+            cx,
             args: self,
+            dot_path: ".".into(),
+            empty_path: "".into(),
         }
         .execute()
     }
@@ -297,7 +507,7 @@ pub(crate) fn output_name(
     orig: &Path,
     out_dir: &Path,
     options: &args::ConvertOptions,
-) -> AnyResult<PathBuf> {
+) -> Result<PathBuf> {
     let mut path = out_dir.join(if orig.is_absolute() {
         orig.file_name()
             .map(Path::new)
@@ -307,7 +517,7 @@ pub(crate) fn output_name(
     });
 
     change_extension(&mut path, options);
-    path.ok()
+    path.wrap_ok()
 }
 
 pub(crate) fn change_extension(path: &mut PathBuf, options: &args::ConvertOptions) {
@@ -324,32 +534,4 @@ pub(crate) fn has_minty_extension<P: AsRef<Path>>(path: P) -> bool {
         return false;
     };
     EXTENSIONS.iter().any(|ext2| ext.eq_ignore_ascii_case(ext2))
-}
-
-pub(crate) fn search_dir(dir: &Path, recurse: u32) -> AnyResult<Vec<PathBuf>> {
-    fn inner(
-        dir: &mut PathBuf,
-        recurse: u32,
-        rel: &mut PathBuf,
-        out: &mut Vec<PathBuf>,
-    ) -> AnyResult<()> {
-        for entry in read_dir(&dir)? {
-            let entry = entry?;
-            let name = &entry.file_name();
-            if entry.metadata()?.is_file() {
-                if has_minty_extension(name) {
-                    out.push(rel.join(name))
-                }
-            } else if recurse > 0 {
-                rel.push(name);
-                dir.push(name);
-                inner(dir, recurse - 1, rel, out)?;
-                dir.pop();
-                rel.pop();
-            }
-        }
-        Ok(())
-    }
-
-    Vec::new().also_ok(|v| inner(&mut dir.into(), recurse, &mut default(), v))
 }

@@ -100,6 +100,20 @@ or install with [`cargo install mintyml-cli`](https://crates.io/crates/mintyml-c
               - code=...:                 <` code `> (default: 'code')
               - code-block-container=...: ``` code block ``` (default: 'pre')
 
+          --forgiving[=<FORGIVING>]
+              If enabled, a best-effort conversion will be attempted for files with errors
+              
+              [possible values: true, false]
+
+          --fail-fast[=<FAIL_FAST>]
+              If enabled, stop processing after an error is found
+
+              Possible values:
+              - false: Continue processing after first error found
+              - true:  Stop processing after first error found
+              - file:  Stop processing a specific file after first error found, but continue processing
+                additional files
+
           --metadata[=<ENABLE>]
               EXPERIMENTAL: If enabled, parsing metadata will be added to the output.
               
@@ -113,3 +127,13 @@ or install with [`cargo install mintyml-cli`](https://crates.io/crates/mintyml-c
               like comments and text segments. Implies `--metadata`
               
               [possible values: true, false]
+
+          --error-mode <ERROR_MODE>
+              Determines how errors should be written to stderr
+              
+              [default: default]
+
+              Possible values:
+              - default: stderr will contain human-readable errors
+              - json:    stderr will contain a JSON stream of errors
+              - silent:  No errors will be written to stderr

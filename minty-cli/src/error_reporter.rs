@@ -4,7 +4,7 @@ use std::{
     io::Write,
     ops::Deref,
     panic::panic_any,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{mpsc, Arc},
     thread,
 };
@@ -12,7 +12,11 @@ use std::{
 use mintyml::error::{DisplayWithSrcOptions, LocationRange};
 use serde::{ser::Serializer, Serialize};
 
-use crate::{args::ErrorMode, utils::default};
+use crate::{
+    args::ErrorMode,
+    io_helper::IoHelper,
+    utils::{default, ArcPath},
+};
 
 #[derive(Serialize)]
 #[serde(bound = "M: Display, E: Iterator + Clone, E::Item: Display")]
@@ -73,7 +77,7 @@ impl<T: Display> Serialize for SerializeDisplay<T> {
 
 #[derive(Serialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
-pub enum StreamName<S = Arc<PathBuf>> {
+pub enum StreamName<S = ArcPath> {
     File(S),
     Stdio,
 }
@@ -301,10 +305,11 @@ where
 }
 
 impl ErrorReporter {
-    pub fn initialize(mut out: impl Write + Send + 'static) -> Self {
+    pub fn initialize(io: impl IoHelper + 'static) -> Self {
         let (sender, receiver) = mpsc::channel::<ErrorEvent>();
 
         let handle = thread::spawn(move || {
+            let mut out = io.stderr().unwrap();
             // batch up errors until we get a Mode or Close event
             let mut pending = Some(Vec::new());
             let mut mode = ErrorMode::Default;

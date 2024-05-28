@@ -1,4 +1,4 @@
-use mintyml::{MetadataConfig, OutputConfig};
+use mintyml::OutputConfig;
 use utils::convert_unwrap;
 
 mod utils;

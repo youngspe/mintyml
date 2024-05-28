@@ -11,7 +11,11 @@ use crate::key_value::KeyValueParser;
 /// For more information, see https://youngspe.github.io/mintyml
 /// and https://github.com/youngspe/mintyml
 #[derive(Debug, Parser)]
-#[command(bin_name = "mintyml-cli", max_term_width = 100)]
+#[command(
+    bin_name = "mintyml-cli",
+    max_term_width = 100,
+    args_override_self = true
+)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
@@ -34,7 +38,6 @@ pub(crate) struct Convert {
         long,
         name = "DEPTH",
         conflicts_with = "src_files",
-        requires = "src_dir"
     )]
     pub(crate) recurse: Option<Option<u32>>,
     #[command(flatten)]
@@ -109,7 +112,7 @@ pub(crate) struct ConvertOptions {
     #[arg(
         long, num_args = 0..=1, value_name = "ENABLE",
         require_equals = true, action = ArgAction::Set,
-        default_missing_value = "true",
+        default_missing_value = "true"
     )]
     pub(crate) complete_page: Option<bool>,
     /// Convert a MinTyML fragment without wrapping it in `<html>` tags.
