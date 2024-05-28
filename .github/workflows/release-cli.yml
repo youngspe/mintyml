@@ -17,13 +17,13 @@ concurrency:
 
 jobs:
   create-release:
-    name: Publish CLI Release
+    name: Create CLI Release
     runs-on: ubuntu-latest
     steps:
     - env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        just new-release '${{ env.TAG }}'
+        gh release create '${{ env.TAG }}' --draft=true --generate-notes
 
 
   build-assets:
@@ -62,4 +62,4 @@ jobs:
     - env:
         GH_TOKEN: ${{ github.token || env.GH_TOKEN }}
       run: |
-        just publish-release '${{ env.TAG }}'
+        gh release edit '${{ env.TAG }}' --draft=false --latest
