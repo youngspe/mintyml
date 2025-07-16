@@ -75,7 +75,7 @@ pub trait TagDefinition<'cfg, _Bound = &'cfg Self>:
 
     fn when<M>(
         self,
-        pred: impl InferencePredicate,
+        pred: impl InferencePredicate + 'cfg,
         value: impl IntoTags<'cfg, M>,
     ) -> Self::Append<impl TagDefinition<'cfg>> {
         let tags = value.tags();

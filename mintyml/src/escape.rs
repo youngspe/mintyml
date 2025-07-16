@@ -18,7 +18,7 @@ const ESCAPE_CHAR: char = '\\';
 pub fn unescape_parts<'src>(
     slice: &'src str,
     slice_offset: impl Into<Option<Location>>,
-) -> impl Iterator<Item = Result<UnescapePart<'src>, EscapeError>> + '_ {
+) -> impl Iterator<Item = Result<UnescapePart<'src>, EscapeError>> + 'src {
     let slice_offset = slice_offset.into().unwrap_or(Location::MIN);
     let mut cursor = StrCursor::new(slice);
 
