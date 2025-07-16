@@ -8,12 +8,12 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies.derive_more]
-version = "0.99.17"
+version = "0.99.20"
 default-features = false
 features = ["display", "add"]
 
 [dependencies.either]
-version = "1.9"
+version = "1.15"
 default-features = false
 
 [dependencies.gramma]

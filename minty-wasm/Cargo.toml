@@ -10,12 +10,12 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-js-sys = "0.3.68"
+js-sys = "0.3.77"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.wasm-bindgen]
-version = "0.2.91"
+version = "0.2.100"
 default-features = false
 features = ["spans", "std"]
 
@@ -23,3 +23,6 @@ features = ["spans", "std"]
 path = "../mintyml"
 version = "0.1"
 default-features = false
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O", "--enable-bulk-memory"]
