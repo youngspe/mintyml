@@ -1,10 +1,10 @@
 use alloc::{vec, vec::Vec};
-use core::mem;
+use core::{iter::Peekable, mem};
 
 use gramma::parse::{Location, LocationRange};
 
 use crate::{
-    ast,
+    ast::{self, NodeListItem, UnmatchedClose},
     error::{ItemType, MisplacedKind},
     utils::default,
 };
@@ -71,33 +71,31 @@ impl<'cfg> BuildContext<'_, 'cfg> {
     }
 
     /// Called when a child combinator has just been read
-    fn post_child_combinator(
+    fn post_child_combinator<'ast>(
         &mut self,
         prefix_range: LocationRange,
-        nodes: &mut &[(Option<ast::Space>, ast::Node)],
+        nodes: &mut impl Nodes<'ast>,
         out_nodes: &mut Vec<Node<'cfg>>,
         selectors: &mut Vec<Selector<'cfg>>,
         last_range: LocationRange,
     ) -> BuildResult {
-        let old_nodes = *nodes;
-        if let Some((
-            &(
-                _,
+        let old_nodes = nodes.clone();
+
+        if let Some(&NodeListItem {
+            node:
                 ast::Node {
                     start,
                     ref node_type,
                     end,
                 },
-            ),
-            ref rest,
-        )) = nodes.split_first()
+            ..
+        }) = nodes.try_next(self)?
         {
             let node_range = LocationRange { start, end };
             let prefix_range = LocationRange {
                 end,
                 ..prefix_range
             };
-            *nodes = rest;
             match node_type {
                 ast::NodeType::Selector { selector } => {
                     selectors.push(self.build_selector(selector)?);
@@ -173,28 +171,25 @@ impl<'cfg> BuildContext<'_, 'cfg> {
     }
 
     /// Called when a selector has just been read
-    fn post_selector(
+    fn post_selector<'ast>(
         &mut self,
         prefix_range: LocationRange,
-        nodes: &mut &[(Option<ast::Space>, ast::Node)],
+        nodes: &mut impl Nodes<'ast>,
         out_nodes: &mut Vec<Node<'cfg>>,
         selectors: &mut Vec<Selector<'cfg>>,
         last_range: LocationRange,
     ) -> BuildResult {
-        let old_nodes = *nodes;
-        if let Some((
-            &(
-                _,
+        let old_nodes = nodes.clone();
+        if let Some(&NodeListItem {
+            node:
                 ast::Node {
                     start,
                     ref node_type,
                     end,
                 },
-            ),
-            ref rest,
-        )) = nodes.split_first()
+            ..
+        }) = nodes.try_next(self)?
         {
-            *nodes = rest;
             let prefix_range = LocationRange {
                 end,
                 ..prefix_range
@@ -254,28 +249,26 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(())
     }
 
-    fn extend_line(
+    fn extend_line<'ast>(
         &mut self,
-        nodes: &mut &[(Option<ast::Space>, ast::Node)],
+        nodes: &mut impl Nodes<'ast>,
         out_nodes: &mut Vec<Node<'cfg>>,
     ) -> BuildResult {
-        while let Some((
-            &(
-                ref space,
+        if let Some(&NodeListItem {
+            ref space,
+            node:
                 ast::Node {
                     start,
                     ref node_type,
                     end,
                 },
-            ),
-            ref rest,
-        )) = nodes.split_first()
+            ..
+        }) = nodes.try_next(self)?
         {
             if let Some(space) = space {
                 out_nodes.push(self.exact_space(space.range)?);
             }
             let node_range = LocationRange { start, end };
-            *nodes = rest;
             match node_type {
                 ast::NodeType::Text { text } => {
                     out_nodes.push(self.build_inline_text(text)?);
@@ -345,14 +338,98 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         Ok(())
     }
 
-    pub fn build_line(
+    pub fn build_line<'ast>(
         &mut self,
-        nodes: &mut &[(Option<ast::Space>, ast::Node)],
+        nodes: &mut impl Nodes<'ast>,
         mut out_nodes: Vec<Node<'cfg>>,
     ) -> BuildResult<Vec<Node<'cfg>>> {
         out_nodes.clear();
         self.extend_line(nodes, &mut out_nodes)?;
         self.validate_line(&mut out_nodes)?;
         Ok(out_nodes)
+    }
+}
+
+pub(super) trait Nodes<'ast>: Clone {
+    fn try_next(&mut self, cx: &mut BuildContext) -> BuildResult<Option<&'ast NodeListItem>>;
+}
+
+#[derive(Clone)]
+struct LineNodes<'ast, It: Clone> {
+    unmatched_close: &'ast Result<(), UnmatchedClose>,
+    iter: It,
+}
+
+impl<'ast, It: Iterator<Item = &'ast NodeListItem> + Clone> Nodes<'ast> for LineNodes<'ast, It> {
+    fn try_next(&mut self, cx: &mut BuildContext) -> BuildResult<Option<&'ast NodeListItem>> {
+        cx.unmatched_close(mem::replace(&mut self.unmatched_close, &Ok(())))?;
+
+        let next = self.iter.next();
+
+        if let Some(next) = next {
+            self.unmatched_close = &next.unmatched_close;
+        }
+
+        Ok(next)
+    }
+}
+
+#[derive(Clone)]
+struct FlattenNodes<It: Iterator>
+where
+    It::Item: Clone,
+{
+    iter: Peekable<It>,
+}
+
+impl<'ast, It: Iterator + Clone> Nodes<'ast> for FlattenNodes<It>
+where
+    It::Item: Nodes<'ast>,
+{
+    fn try_next(&mut self, cx: &mut BuildContext) -> BuildResult<Option<&'ast NodeListItem>> {
+        while let Some(nodes) = self.iter.peek_mut() {
+            let Some(next) = nodes.try_next(cx)? else {
+                let _ = self.iter.next();
+                continue;
+            };
+
+            return Ok(Some(next));
+        }
+        Ok(None)
+    }
+}
+
+pub(super) fn to_node_list<'ast, I>(
+    initial_unmatched_close: &'ast Result<(), UnmatchedClose>,
+    iter: impl IntoIterator<IntoIter = I>,
+) -> impl Nodes<'ast>
+where
+    I: Iterator<Item = &'ast NodeListItem> + Clone,
+{
+    LineNodes {
+        unmatched_close: initial_unmatched_close,
+        iter: iter.into_iter(),
+    }
+}
+
+pub(super) fn line_nodes<'ast, I>(node_list: &'ast Option<ast::NodeList>) -> impl Nodes<'ast> {
+    let (unmatched_close, nodes) = match node_list {
+        Some(ast::NodeList {
+            unmatched_close,
+            nodes,
+        }) => (unmatched_close, nodes.as_slice()),
+        None => (&Ok(()), [].as_slice()),
+    };
+
+    to_node_list(unmatched_close, nodes)
+}
+
+pub(super) fn flatten_node_lists<'ast, I>(iter: impl IntoIterator<IntoIter = I>) -> impl Nodes<'ast>
+where
+    I: Iterator + Clone,
+    I::Item: Nodes<'ast>,
+{
+    FlattenNodes {
+        iter: iter.into_iter().peekable(),
     }
 }

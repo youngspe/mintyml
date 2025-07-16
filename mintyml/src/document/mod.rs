@@ -6,9 +6,10 @@ mod text;
 use alloc::{vec, vec::Vec};
 
 use gramma::parse::{Location, LocationRange};
+use line::line_nodes;
 
 use crate::{
-    ast,
+    ast::{self, UnmatchedClose},
     error::{
         Errors, InternalError, InternalResult, ItemType, MisplacedKind, SyntaxError,
         SyntaxErrorKind, UnclosedDelimiterKind,
@@ -141,6 +142,16 @@ impl<'cfg> BuildContext<'_, 'cfg> {
         }])
     }
 
+    fn unmatched_close<T>(&mut self, ast: &Result<T, UnmatchedClose>) -> BuildResult {
+        let Err(unmatched_close) = ast else {
+            return Ok(());
+        };
+        self.errors.syntax([SyntaxError {
+            range: unmatched_close.close.range,
+            kind: SyntaxErrorKind::UnmatchedClose {},
+        }])
+    }
+
     fn invalid(&mut self, range: LocationRange, item: ItemType) -> BuildResult {
         self.errors.syntax([SyntaxError {
             range,
@@ -173,23 +184,25 @@ impl<'cfg> BuildContext<'_, 'cfg> {
 
         for &ast::Line {
             start,
-            ref nodes,
+            ref node_list,
             end,
         } in lines
         {
-            if nodes.is_empty() {
-                out_nodes.push(self.paragraph_end(last_line_end, end)?);
-            } else {
-                let mut nodes = &nodes[..];
-                node_buf = self.build_line(&mut nodes, node_buf)?;
+            match node_list {
+                None => {
+                    out_nodes.push(self.paragraph_end(last_line_end, end)?);
+                }
+                Some(node_list) => {
+                    node_buf = self.build_line(&mut line_nodes(node_list), node_buf)?;
 
-                self.add_line(
-                    &mut out_nodes,
-                    &mut node_buf,
-                    LocationRange { start, end },
-                    last_line_end,
-                    form_paragraphs,
-                )?;
+                    self.add_line(
+                        &mut out_nodes,
+                        &mut node_buf,
+                        LocationRange { start, end },
+                        last_line_end,
+                        form_paragraphs,
+                    )?;
+                }
             }
             last_line_end = end;
         }

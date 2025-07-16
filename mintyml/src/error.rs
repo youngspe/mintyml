@@ -61,6 +61,9 @@ impl SyntaxError {
                     SyntaxErrorKind::Unclosed { .. } => {
                         write!(f, "Unclosed delimiter {sample}")
                     }
+                    SyntaxErrorKind::Unexpected { .. } => {
+                        write!(f, "Unexpected {sample}")
+                    }
                     kind => write!(f, "{kind}"),
                 }?;
 
@@ -111,6 +114,10 @@ pub enum SyntaxErrorKind {
     #[non_exhaustive]
     #[display(fmt = "Invalid {}", item)]
     InvalidItem { item: ItemType },
+    #[non_exhaustive]
+    UnmatchedClose {},
+    #[non_exhaustive]
+    Unexpected {},
     #[non_exhaustive]
     MisplacedItem { kind: MisplacedKind },
 }

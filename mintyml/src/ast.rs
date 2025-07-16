@@ -1,4 +1,5 @@
 mod elements;
+mod errors;
 mod selectors;
 mod text;
 mod tokens;
@@ -9,6 +10,7 @@ use gramma::ParseError;
 type Location = gramma::parse::Location;
 
 pub(crate) use elements::*;
+pub(crate) use errors::*;
 pub(crate) use selectors::*;
 pub(crate) use text::*;
 pub(crate) use tokens::*;
@@ -27,10 +29,21 @@ gramma::define_rule!(
         Element { element: Element },
     }
 
+    pub struct NodeListItem {
+        pub space: Option<Space>,
+        pub node: Node,
+        pub unmatched_close: Result<(), UnmatchedClose>,
+    }
+
+    pub struct NodeList {
+        pub unmatched_close: Result<(), UnmatchedClose>,
+        #[transform(ignore_around<Space>, not_empty)]
+        pub nodes: Vec<NodeListItem>,
+    }
+
     pub struct Line {
         pub start: Location,
-        #[transform(ignore_around<Space>)]
-        pub nodes: Vec<(Option<Space>, Node)>,
+        pub node_list: Option<NodeList>,
         pub end: Location,
     }
 
@@ -245,7 +258,7 @@ section {
     fn empty_line() {
         let src = "";
         let line = gramma::parse_tree::<Line, LOOKAHEAD>(src).unwrap();
-        assert_eq!(line.nodes.len(), 0);
+        assert_eq!(line.node_list.len(), 0);
     }
 
     #[test]
@@ -254,7 +267,7 @@ section {
         let line = gramma::parse_tree::<(LeftBrace, Line, RightBrace), 2>(src)
             .unwrap()
             .1;
-        assert_eq!(line.nodes.len(), 1);
+        assert_eq!(line.node_list.len(), 1);
     }
 
     #[test]
