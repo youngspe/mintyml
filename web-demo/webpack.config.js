@@ -4,9 +4,9 @@ const path = require('path')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const HtmlWebpackTagsPlugin = require('html-webpack-tags-plugin')
 const CopyPlugin = require('copy-webpack-plugin')
+const tsLoader = require('ts-loader');
 
 const isProduction = process.env.NODE_ENV == 'production'
-
 
 const stylesHandler = 'style-loader'
 
@@ -47,9 +47,17 @@ const config = {
     module: {
         rules: [
             {
+                test: /.*\.html/i,
+                loader: 'html-loader',
+            },
+            {
                 test: /\.(ts|tsx)$/i,
                 loader: 'ts-loader',
                 exclude: ['/node_modules/'],
+                /** @type {Partial<import('ts-loader').Options>} */
+                options: {
+                    configFile: path.join(__dirname, 'tsconfig.json')
+                }
             },
             {
                 test: /\.css$/i,

@@ -1,3 +1,5 @@
+import './collapsible'
+
 import { ConvertResponseMessage, ConvertRequestMessage } from './message'
 
 import '../index.scss'
@@ -342,7 +344,7 @@ class Demo {
 }
 
 if (matchMedia('(max-width: 480px').matches) {
-    (document.querySelector('#text-in-wrapper details') as HTMLDetailsElement).open = false
+    (document.querySelector('#text-in-wrapper>*'))?.removeAttribute('open')
 }
 
 const params = new URLSearchParams(window.location.search)

@@ -1,0 +1,33 @@
+<style>
+    :host {
+        display: block;
+    }
+
+    .expand-button {
+        flex: 0;
+    }
+
+    .expand-button::before {
+        width: 1ch;
+        display: inline-block;
+        content: '+' / '';
+        vertical-align: middle;
+        margin-block: 0;
+        margin-inline: 1ch;
+    }
+
+    #header {
+        display: flex;
+        flex-flow: row;
+    }
+
+    [aria-expanded=true] .expand-button::before {
+        content: '\002212' / ''
+    }
+</style>
+
+<div part="header" id="header">
+    <slot name="button" aria-controls="content" role="button"><span class="expand-button"></span></slot>
+    <slot name="label"></slot>
+</div>
+<slot id="content"></slot>

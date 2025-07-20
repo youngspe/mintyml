@@ -1,5 +1,5 @@
-import { ConvertRequestMessage, ConvertResponseMessage } from './message'
-import { MintymlConverter, MintymlError } from 'mintyml'
+import { ConvertRequestMessage } from './message'
+import { MintymlConverter } from 'mintyml'
 
 let converter: MintymlConverter
 let mintyml: Promise<typeof import('mintyml')>
