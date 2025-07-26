@@ -11,12 +11,14 @@ table.report {
     caption> Sales report
 
     thead {
-      <(th[colspan=2]> Name)>
-      <(th[rowspan=2]> Sales)>
-      <(th[rowspan=2]> Expenses)>
-      <(th[rowspan=2]> Net Profit)>
+      {
+        [colspan=2]> Name
+        [rowspan=2]> Sales
+        [rowspan=2]> Expenses
+        [rowspan=2]> Net Profit
+      }
 
-      <(th> First)> <(th> Last)>
+      <(First)> <(Last)>
     }
 
     <(John)> <(Smith)>
@@ -28,5 +30,8 @@ table.report {
     <(Carol)> <(Green)>
     <(20.00)> <(3.00)> <(17.00)>
 
-    tfoot { <(th[colspan=2]> Total)> <(45.00)> <(12.00)> <(33.00)> }
+    tfoot {
+      <(th[colspan=2]> Total)>
+      <(45.00)> <(12.00)> <(33.00)>
+    }
 }
